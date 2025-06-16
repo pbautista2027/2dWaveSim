@@ -79,13 +79,13 @@
     const cols = 100, rows = 100;
     const kmPerCell = 0.5;
     const dt = 0.01;
-    const Vp = 6.0, Vs = 3.5;
+    const pWaveConstantVelocity = 6.0, sWaveConstantVelocity = 3.5;
 
-    var cellW, cellH;
+    var cellWidth, cellHeight;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    cellW = canvas.width / cols;
-    cellH = canvas.height / rows;
+    cellWidth = canvas.width / cols;
+    cellHeight = canvas.height / rows;
 
     var simRunning = false;
     var drawTool = 'pen';
@@ -93,29 +93,29 @@
     var originX = null, originY = null;
     var storedMag = 5.0;
 
-    const fieldV = [], fieldH = [], velV = [], velH = [], borders = [];
+    const pWaveDisplacement = [], sWaveDisplacement = [], pWaveVelocity = [], sWaveVelocity = [], borders = [];
     for (var y = 0; y < rows; y++) {
-      fieldV[y] = new Float32Array(cols);
-      fieldH[y] = new Float32Array(cols);
-      velV[y] = new Float32Array(cols);
-      velH[y] = new Float32Array(cols);
+      pWaveDisplacement[y] = new Float32Array(cols);
+      sWaveDisplacement[y] = new Float32Array(cols);
+      pWaveConstantVelocity[y] = new Float32Array(cols);
+      sWaveVelocity[y] = new Float32Array(cols);
       borders[y] = new Uint8Array(cols);
     }
 
     function resetFields() {
       for (var y = 0; y < rows; y++) {
-        fieldV[y].fill(0);
-        fieldH[y].fill(0);
-        velV[y].fill(0);
-        velH[y].fill(0);
+        pWaveDisplacement[y].fill(0);
+        sWaveDisplacement[y].fill(0);
+        pWaveVelocity[y].fill(0);
+        sWaveVelocity[y].fill(0);
       }
     }
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      cellW = canvas.width / cols;
-      cellH = canvas.height / rows;
+      cellWidth = canvas.width / cols;
+      cellHeight = canvas.height / rows;
     }
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
@@ -123,10 +123,10 @@
     function drawGrid() {
       ctx.strokeStyle = 'rgba(255,255,255,0.05)';
       for (var x = 0; x <= cols; x++) {
-        ctx.beginPath(); ctx.moveTo(x * cellW, 0); ctx.lineTo(x * cellW, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x * cellWidth, 0); ctx.lineTo(x * cellWidth, canvas.height); ctx.stroke();
       }
       for (var y = 0; y <= rows; y++) {
-        ctx.beginPath(); ctx.moveTo(0, y * cellH); ctx.lineTo(canvas.width, y * cellH); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, y * cellHeight); ctx.lineTo(canvas.width, y * cellHeight); ctx.stroke();
       }
     }
 
@@ -135,21 +135,21 @@
         for (var x = 0; x < cols; x++) {
           if (borders[y][x]) continue;
 
-          const p = fieldV[y][x];
-          const s = fieldH[y][x];
+          const p = pWaveDisplacement[y][x];
+          const s = sWaveDisplacement[y][x];
 
           const r = Math.max(0, Math.min(255, 128 + 127 * (p - s)));
           const g = Math.max(0, Math.min(255, 128 + 127 * (s - p)));
           const b = Math.max(0, Math.min(255, 128 - 127 * (p + s)));
 
           ctx.fillStyle = `rgb(${r},${g},${b})`;
-          ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
+          ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
         }
       }
 
       if (originX !== null && originY !== null) {
         ctx.fillStyle = 'lime';
-        ctx.fillRect(originX * cellW, originY * cellH, cellW, cellH);
+        ctx.fillRect(originX * cellWidth, originY * cellHeight, cellWidth, cellHeight);
       }
     }
 
@@ -157,35 +157,35 @@
       ctx.fillStyle = "#00f";
       for (var y = 0; y < rows; y++) {
         for (var x = 0; x < cols; x++) {
-          if (borders[y][x]) ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
+          if (borders[y][x]) ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
         }
       }
     }
 
     function update() {
       if (!simRunning) return;
-      const scaleVp = (Vp * dt / kmPerCell) ** 2;
-      const scaleVs = (Vs * dt / kmPerCell) ** 2;
+      const scaleVp = (pWaveConstantVelocity * dt / kmPerCell) ** 2;
+      const scaleVs = (sWaveConstantVelocity * dt / kmPerCell) ** 2;
 
       for (var y = 1; y < rows - 1; y++) {
         for (var x = 1; x < cols - 1; x++) {
           if (borders[y][x]) continue;
-          const lapV = fieldV[y][x+1] + fieldV[y][x-1] + fieldV[y+1][x] + fieldV[y-1][x] - 4 * fieldV[y][x];
-          const lapH = fieldH[y][x+1] + fieldH[y][x-1] + fieldH[y+1][x] + fieldH[y-1][x] - 4 * fieldH[y][x];
-          velV[y][x] += scaleVp * lapV;
-          velH[y][x] += scaleVs * lapH;
-          velV[y][x] *= 0.99;
-          velH[y][x] *= 0.99;
+          const lapV = pWaveDisplacement[y][x+1] + pWaveDisplacement[y][x-1] + pWaveDisplacement[y+1][x] + pWaveDisplacement[y-1][x] - 4 * pWaveDisplacement[y][x];
+          const lapH = sWaveDisplacement[y][x+1] + sWaveDisplacement[y][x-1] + sWaveDisplacement[y+1][x] + sWaveDisplacement[y-1][x] - 4 * sWaveDisplacement[y][x];
+          pWaveVelocity[y][x] += scaleVp * lapV;
+          sWaveVelocity[y][x] += scaleVs * lapH;
+          pWaveVelocity[y][x] *= 0.99;
+          sWaveVelocity[y][x] *= 0.99;
         }
       }
       for (var y = 0; y < rows; y++) {
         for (var x = 0; x < cols; x++) {
           if (borders[y][x]) {
-            velV[y][x] *= -0.5;
-            velH[y][x] *= -0.5;
+            pWaveVelocity[y][x] *= -0.5;
+            sWaveVelocity[y][x] *= -0.5;
           }
-          fieldV[y][x] += velV[y][x];
-          fieldH[y][x] += velH[y][x];
+          pWaveDisplacement[y][x] += pWaveVelocity[y][x];
+          sWaveDisplacement[y][x] += sWaveVelocity[y][x];
         }
       }
     }
@@ -202,8 +202,8 @@
 
     canvas.addEventListener("mousedown", e => {
       const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / cellW);
-      const y = Math.floor((e.clientY - rect.top) / cellH);
+      const x = Math.floor((e.clientX - rect.left) / cellWidth);
+      const y = Math.floor((e.clientY - rect.top) / cellHeight);
       if (simRunning) return;
       if (drawTool === 'pen' || drawTool === 'eraser') {
         paint(x, y); isDrawing = true;
@@ -217,8 +217,8 @@
     canvas.addEventListener("mousemove", e => {
       if (!isDrawing || simRunning) return;
       const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / cellW);
-      const y = Math.floor((e.clientY - rect.top) / cellH);
+      const x = Math.floor((e.clientX - rect.left) / cellWidth);
+      const y = Math.floor((e.clientY - rect.top) / cellHeight);
       paint(x, y);
     });
 
@@ -258,8 +258,8 @@
           if (ix >= 0 && ix < cols && iy >= 0 && iy < rows) {
             const d = Math.hypot(dx, dy);
             const amp = mag * Math.exp(-d);
-            fieldV[iy][ix] += amp;
-            fieldH[iy][ix] += amp * 0.8;
+            pWaveDisplacement[iy][ix] += amp;
+            sWaveDisplacement[iy][ix] += amp * 0.8;
           }
         }
       }
