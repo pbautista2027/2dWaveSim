@@ -78,23 +78,23 @@
 
     const cols = 100, rows = 100;
     const kmPerCell = 0.5;
-    const dt = 0.01;
+    const fixedDt = 0.01;
     const pWaveConstantVelocity = 6.0, sWaveConstantVelocity = 3.5;
 
-    var cellWidth, cellHeight;
+    let cellWidth, cellHeight;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     cellWidth = canvas.width / cols;
     cellHeight = canvas.height / rows;
 
-    var simRunning = false;
-    var drawTool = 'pen';
-    var isDrawing = false;
-    var originX = null, originY = null;
-    var storedMag = 5.0;
+    let simRunning = false;
+    let drawTool = 'pen';
+    let isDrawing = false;
+    let originX = null, originY = null;
+    let storedMag = 5.0;
 
     const pWaveDisplacement = [], sWaveDisplacement = [], pWaveVelocity = [], sWaveVelocity = [], borders = [];
-    for (var y = 0; y < rows; y++) {
+    for (let y = 0; y < rows; y++) {
       pWaveDisplacement[y] = new Float32Array(cols);
       sWaveDisplacement[y] = new Float32Array(cols);
       pWaveVelocity[y] = new Float32Array(cols);
@@ -103,7 +103,7 @@
     }
 
     function resetFields() {
-      for (var y = 0; y < rows; y++) {
+      for (let y = 0; y < rows; y++) {
         pWaveDisplacement[y].fill(0);
         sWaveDisplacement[y].fill(0);
         pWaveVelocity[y].fill(0);
@@ -122,17 +122,17 @@
 
     function drawGrid() {
       ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      for (var x = 0; x <= cols; x++) {
+      for (let x = 0; x <= cols; x++) {
         ctx.beginPath(); ctx.moveTo(x * cellWidth, 0); ctx.lineTo(x * cellWidth, canvas.height); ctx.stroke();
       }
-      for (var y = 0; y <= rows; y++) {
+      for (let y = 0; y <= rows; y++) {
         ctx.beginPath(); ctx.moveTo(0, y * cellHeight); ctx.lineTo(canvas.width, y * cellHeight); ctx.stroke();
       }
     }
 
     function drawWaves() {
-      for (var y = 0; y < rows; y++) {
-        for (var x = 0; x < cols; x++) {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
           if (borders[y][x]) continue;
 
           const p = pWaveDisplacement[y][x];
@@ -155,20 +155,19 @@
 
     function drawBorders() {
       ctx.fillStyle = "#00f";
-      for (var y = 0; y < rows; y++) {
-        for (var x = 0; x < cols; x++) {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
           if (borders[y][x]) ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
         }
       }
     }
 
-    function update() {
-      if (!simRunning) return;
+    function updatePhysics(dt) {
       const scaleVp = (pWaveConstantVelocity * dt / kmPerCell) ** 2;
       const scaleVs = (sWaveConstantVelocity * dt / kmPerCell) ** 2;
 
-      for (var y = 1; y < rows - 1; y++) {
-        for (var x = 1; x < cols - 1; x++) {
+      for (let y = 1; y < rows - 1; y++) {
+        for (let x = 1; x < cols - 1; x++) {
           if (borders[y][x]) continue;
           const lapV = pWaveDisplacement[y][x+1] + pWaveDisplacement[y][x-1] + pWaveDisplacement[y+1][x] + pWaveDisplacement[y-1][x] - 4 * pWaveDisplacement[y][x];
           const lapH = sWaveDisplacement[y][x+1] + sWaveDisplacement[y][x-1] + sWaveDisplacement[y+1][x] + sWaveDisplacement[y-1][x] - 4 * sWaveDisplacement[y][x];
@@ -178,8 +177,9 @@
           sWaveVelocity[y][x] *= 0.99;
         }
       }
-      for (var y = 0; y < rows; y++) {
-        for (var x = 0; x < cols; x++) {
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
           if (borders[y][x]) {
             pWaveVelocity[y][x] *= -0.5;
             sWaveVelocity[y][x] *= -0.5;
@@ -190,15 +190,25 @@
       }
     }
 
-    function animate() {
-      update();
+    // Main loop with delta time
+    let lastTimestamp = performance.now();
+    let accumulated = 0;
+    function gameLoop(timestamp) {
+      const delta = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+      accumulated += delta;
+      while (accumulated >= fixedDt) {
+        if (simRunning) updatePhysics(fixedDt);
+        accumulated -= fixedDt;
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawGrid();
       drawWaves();
       drawBorders();
-      requestAnimationFrame(animate);
+      requestAnimationFrame(gameLoop);
     }
-    animate();
+    requestAnimationFrame(gameLoop);
 
     canvas.addEventListener("mousedown", e => {
       const rect = canvas.getBoundingClientRect();
@@ -251,8 +261,8 @@
 
     function injectEarthquake(mag) {
       const r = 3;
-      for (var dy = -r; dy <= r; dy++) {
-        for (var dx = -r; dx <= r; dx++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
           const ix = originX + dx;
           const iy = originY + dy;
           if (ix >= 0 && ix < cols && iy >= 0 && iy < rows) {
