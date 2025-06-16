@@ -1,115 +1,179 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Seismic Simulator</title>
+  <title>Seismic Simulator Step 3 (Fixed UI)</title>
   <style>
-    html, body { margin:0; padding:0; background:black; overflow:hidden; }
-    #ui {
-      position:absolute; top:10px; left:10px;
-      background:rgba(255,255,255,0.95); padding:10px;
-      font-family:sans-serif; font-size:14px; z-index:10; max-width:360px;
+    html, body {
+      margin:0; padding:0;
+      width:100%; height:100%;
+      overflow:hidden;
+      background:#222;
+      font-family:sans-serif;
+      color:#111;
     }
-    #tools, #mediumControls, #legends { margin-bottom:8px; }
-    .tool-btn {
-      padding:4px 8px; margin:2px; border:1px solid #888;
-      background:#eee; cursor:pointer;
+    canvas {
+      position:absolute;
+      top:0; left:0;
+      width:100%; height:100%;
     }
-    .tool-btn.active {
+
+    /* Draggable window style for each dropdown */
+    .window {
+      position: absolute;
+      background: #fafafa;
+      border: 1px solid #888;
+      border-radius: 4px;
+      width: 240px;
+      max-height: 90vh;
+      overflow: auto;
+      z-index: 20;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .window summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #444;
+      color: white;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 4px 4px 0 0;
+    }
+    .window .drag-handle {
+      cursor: move;
+      padding-left: 8px;
+      font-size: 0.9em;
+    }
+    .window .content {
+      padding: 8px;
+      background: white;
+      color: #111;
+    }
+    .window button {
+      display:block; width:100%; margin:6px 0; padding:6px;
+      border:1px solid #888; background:#eee; cursor:pointer; font-size:14px;
+    }
+    .window button.active {
       background:#4285f4; color:white; border-color:#2a56c6;
     }
-    .control-group { margin-top:8px; }
-    .control-group label { margin-right:8px; }
-    details { margin-top:8px; }
-    details summary {
-      cursor: pointer;
-      font-weight: bold;
-      outline: none;
+    .window label {
+      display:block; margin:6px 0; font-size:14px;
     }
-    details ul { padding-left: 1.2em; margin:4px 0; }
-    details li { margin:2px 0; }
-    .color-swatch {
-      display:inline-block;
-      width:1em; height:1em;
-      margin-right:0.4em;
-      vertical-align:middle;
+    .window input[type="range"], .window input[type="number"], .window select {
+      width:100%; margin:4px 0; box-sizing:border-box; padding:4px;
     }
-    canvas { display:block; width:100vw; height:100vh; background:black; }
-    #startSim, #reload, #replay { display:none; margin-top:10px; }
+
+    /* Top-right global controls */
+    #globalControls {
+      position:absolute; top:10px; right:10px; display:flex; gap:8px;
+      z-index:20; opacity:0.8;
+    }
+    #globalControls button {
+      padding:6px 12px; font-size:14px; cursor:pointer;
+    }
+
+    @media (max-width:600px) {
+      /* On small screens, windows may overlap, but can still be dragged */
+      .window { width: 90vw; }
+    }
   </style>
 </head>
 <body>
-  <div id="ui">
 
-    <!-- Paint‐Medium Picker Only -->
-    <div id="mediumControls">
-      <label>Paint Medium:
-        <select id="paintMediumSelect"></select>
-      </label>
-    </div>
+  <canvas id="canvas"></canvas>
 
-    <!-- Tools -->
-    <div id="tools">
-      <button id="penTool"    class="tool-btn active">Pen</button>
-      <button id="eraserTool" class="tool-btn">Eraser</button>
-      <button id="rectTool"   class="tool-btn">Rectangle</button>
-      <button id="sphereTool" class="tool-btn">Sphere</button>
-      <button id="fillTool"   class="tool-btn">Fill</button>
-      <button id="originTool" class="tool-btn">Origin</button>
-    </div>
-
-    <div>Current Tool: <strong id="toolLabel">Pen</strong></div>
-
-    <div class="control-group">
-      <label>Pen Width:
-        <span id="penWidthLabel">1</span>
-      </label>
-      <input id="penWidth" type="range" min="1" max="10" value="1">
-    </div>
-    <div class="control-group">
-      <label>Eraser Size:
-        <span id="eraserSizeLabel">1</span>
-      </label>
-      <input id="eraserSize" type="range" min="1" max="20" value="1">
-    </div>
-    <div class="control-group">
-      <label>
-        <input type="checkbox" id="shapeHollow">
-        Hollow Shapes
-      </label>
-    </div>
-
-    <div class="control-group">
+  <!-- Draggable dropdown windows -->
+  <details id="ctrlDropdown" class="window" style="top:10px; left:10px;" open>
+    <summary>
+      <span>Controls & Legends</span>
+      <span class="drag-handle">⣿</span>
+    </summary>
+    <div class="content">
+      <button id="originBtn">Origin</button>
       <label>Magnitude:
         <input id="mag" type="number" min="5.0" max="6.6" step="0.1" value="5.0">
       </label>
+      <button id="startSim">Start</button>
+      <button id="replay">Replay</button>
+      <button id="reload">Reload</button>
+
+      <details style="margin-top:8px;">
+        <summary>Medium Legend</summary>
+        <div id="mediumLegend"></div>
+      </details>
+      <details style="margin-top:8px;">
+        <summary>Wave Legend</summary>
+        <ul style="padding-left:1.2em; color:#111;">
+          <li><span style="display:inline-block;width:1em;height:1em;background:red;margin-right:4px"></span>P (+)</li>
+          <li><span style="display:inline-block;width:1em;height:1em;background:cyan;margin-right:4px"></span>P (−)</li>
+          <li><span style="display:inline-block;width:1em;height:1em;background:green;margin-right:4px"></span>S (+)</li>
+          <li><span style="display:inline-block;width:1em;height:1em;background:magenta;margin-right:4px"></span>S (−)</li>
+          <li><span style="display:inline-block;width:1em;height:1em;background:gray;margin-right:4px"></span>Neutral</li>
+        </ul>
+      </details>
     </div>
+  </details>
 
-    <p>Click “Origin” then click a cell to place epicenter.</p>
-    <button id="startSim">Start Simulation</button>
-    <button id="replay">Replay Simulation</button>
-    <button id="reload">Reload Simulation</button>
+  <details id="paintDropdown" class="window" style="top:10px; left:270px;">
+    <summary>
+      <span>Paint Tools</span>
+      <span class="drag-handle">⣿</span>
+    </summary>
+    <div class="content">
+      <button id="penBtn" class="active">Pen</button>
+      <button id="eraserBtn">Eraser</button>
+      <button id="rectBtn">Rectangle</button>
+      <button id="sphereBtn">Sphere</button>
+      <button id="fillBtn">Fill</button>
 
-    <!-- Medium Legend -->
-    <div id="legends">
-      <strong>Mediums:</strong>
-      <div id="mediumLegend"></div>
+      <label>Pen Width: <span id="penWidthLabel2">1</span></label>
+      <input type="range" id="penWidth2" min="1" max="10" value="1">
+
+      <label>Eraser Size: <span id="eraserSizeLabel2">1</span></label>
+      <input type="range" id="eraserSize2" min="1" max="20" value="1">
+
+      <label style="margin-top:8px;">
+        <input type="checkbox" id="shapeHollow2"> Hollow Shapes
+      </label>
+
+      <label style="margin-top:8px;">Paint Medium:
+        <select id="paintMediumSelect"></select>
+      </label>
     </div>
+  </details>
 
-    <!-- Wave Legend as collapsible -->
-    <details>
-      <summary>Wave Color Legend</summary>
-      <ul>
-        <li><span class="color-swatch" style="background:red"></span>Positive P-wave</li>
-        <li><span class="color-swatch" style="background:cyan"></span>Negative P-wave</li>
-        <li><span class="color-swatch" style="background:green"></span>Positive S-wave</li>
-        <li><span class="color-swatch" style="background:magenta"></span>Negative S-wave</li>
-        <li><span class="color-swatch" style="background:gray"></span>Neutral (zero)</li>
-      </ul>
-    </details>
+  <details id="terrainDropdown" class="window" style="top:10px; left:530px;">
+    <summary>
+      <span>Terrain Generation</span>
+      <span class="drag-handle">⣿</span>
+    </summary>
+    <div class="content">
+      <label>Noise Scale: <span id="noiseScaleLabel">0.10</span></label>
+      <input id="noiseScale" type="range" min="0.01" max="0.5" step="0.01" value="0.10">
+
+      <label>Water Threshold: <span id="waterThreshLabel">0.30</span></label>
+      <input id="waterThresh" type="range" min="0" max="1" step="0.01" value="0.30">
+
+      <label>Sand Threshold: <span id="sandThreshLabel">0.40</span></label>
+      <input id="sandThresh" type="range" min="0" max="1" step="0.01" value="0.40">
+
+      <label>Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
+      <input id="rockThresh" type="range" min="0" max="1" step="0.01" value="0.70">
+
+      <button id="generateTerrain" style="margin-top:8px;">Generate Terrain</button>
+    </div>
+  </details>
+
+  <!-- Top-right: visibility & reset -->
+  <div id="globalControls">
+    <button id="toggleAll">Toggle Windows</button>
+    <button id="resetAll">Reset Windows</button>
   </div>
 
-  <canvas id="canvas"></canvas>
+  <!-- Reference external JS -->
   <script src="index.js"></script>
 </body>
 </html>

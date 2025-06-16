@@ -1,331 +1,402 @@
 // index.js
 
-// — Medium system —————————————————————————————
-
-class Medium {
-  constructor(id, name, color, speed=1, damping=0.995, reflect=false) {
-    this.id      = id;
-    this.name    = name;
-    this.color   = color;
-    this.speed   = speed;
-    this.damping = damping;
-    this.reflect = reflect;
-  }
-  propagate() {
-    return !this.reflect;
-  }
-}
-
-const mediums = [
-  new Medium(0, 'Soft Soil', '#884400', 1.0, 0.995, false),
-  new Medium(1, 'Border',    '#0044ff', 1.0, 0.5,   true),
-  new Medium(2, 'Water',     '#00aaff', 0.6, 0.98,  false),
-  new Medium(3, 'Rock',      '#888888', 1.4, 0.995, false),
+// ===== Dropdown visibility & reset =====
+const dropdowns = [
+  document.getElementById('ctrlDropdown'),
+  document.getElementById('paintDropdown'),
+  document.getElementById('terrainDropdown')
 ];
+document.getElementById('toggleAll').onclick = () => {
+  const anyOpen = dropdowns.some(d => d.open);
+  dropdowns.forEach(d => d.open = !anyOpen);
+};
 
-const rows = 100, cols = 100;
-const mediumGrid = Array.from({ length: rows },
-  () => new Uint8Array(cols).fill(0)
-);
+// Default positions for reset:
+const windowDefaults = {
+  ctrlDropdown: { left: 10, top: 10 },
+  paintDropdown: { left: 270, top: 10 },
+  terrainDropdown: { left: 530, top: 10 }
+};
 
-// — Simulation arrays ————————————————————————————
+document.getElementById('resetAll').onclick = () => {
+  // Reposition windows to defaults, keep their open/closed state unchanged.
+  dropdowns.forEach(d => {
+    const def = windowDefaults[d.id];
+    if (def) {
+      d.style.left = def.left + 'px';
+      d.style.top  = def.top  + 'px';
+    }
+  });
+};
 
-const pDisp = [], sDisp = [], pVel = [], sVel = [];
-for (let y = 0; y < rows; y++) {
-  pDisp[y] = new Float32Array(cols);
-  sDisp[y] = new Float32Array(cols);
-  pVel[y]  = new Float32Array(cols);
-  sVel[y]  = new Float32Array(cols);
-}
-function resetFields(){
-  for(let y=0;y<rows;y++){
-    pDisp[y].fill(0); sDisp[y].fill(0);
-    pVel[y].fill(0);  sVel[y].fill(0);
-  }
-}
+// ===== Window dragging =====
+dropdowns.forEach(win => {
+  const handle = win.querySelector('.drag-handle');
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  let origLeft = 0, origTop = 0;
 
-// — Canvas setup ——————————————————————————————
+  handle.addEventListener('mousedown', e => {
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    const rect = win.getBoundingClientRect();
+    origLeft = rect.left;
+    origTop = rect.top;
+    e.preventDefault();
+    win.style.zIndex = 1000;
+  });
 
-const canvas = document.getElementById('canvas');
-const ctx    = canvas.getContext('2d');
-let cellW, cellH;
-function resize() {
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
-  cellW = canvas.width  / cols;
-  cellH = canvas.height / rows;
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    win.style.left = (origLeft + dx) + 'px';
+    win.style.top  = (origTop + dy) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      win.style.zIndex = 20;
+    }
+  });
+});
+
+// ===== Canvas & Simulation Setup =====
+const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
+let cols=100, rows=100, cellW, cellH;
+function resize(){ 
+  canvas.width=innerWidth; 
+  canvas.height=innerHeight; 
+  cellW=canvas.width/cols; 
+  cellH=canvas.height/rows; 
 }
 window.addEventListener('resize', resize);
 resize();
 
-// — UI hooks ——————————————————————————————
+// — Medium & Grid —
+class Medium {
+  constructor(id,name,color,speed=1,damping=0.995,reflect=false){
+    this.id=id; this.name=name; this.color=color;
+    this.speed=speed; this.damping=damping; this.reflect=reflect;
+  }
+  propagate(){ return !this.reflect; }
+}
+const mediums = [
+  new Medium(0,'Soft Soil','#884400',1,0.995,false),
+  new Medium(1,'Border','#0044ff',1,0.5,true),
+  new Medium(2,'Water','#00aaff',0.6,0.98,false),
+  new Medium(3,'Sand','#d2b48c',0.9,0.99,false),
+  new Medium(4,'Rock','#888888',1.4,0.995,false),
+];
+const mediumGrid = Array.from({length:rows},()=>new Uint8Array(cols).fill(0));
 
-const paintSelect   = document.getElementById('paintMediumSelect');
-const mediumLegend  = document.getElementById('mediumLegend');
-
-mediums.forEach(m => {
-  paintSelect.add(new Option(m.name, m.id));
-  const row = document.createElement('div');
-  const sw = document.createElement('span');
-  sw.className = 'color-swatch';
-  sw.style.background = m.color;
-  row.appendChild(sw);
-  row.append(m.name);
-  mediumLegend.appendChild(row);
+// Populate legend
+const legendDiv = document.getElementById('mediumLegend');
+mediums.forEach(m=>{
+  const row=document.createElement('div');
+  row.innerHTML=`<span style="display:inline-block;width:1em;height:1em;background:${m.color};margin-right:4px"></span>${m.name}`;
+  legendDiv.appendChild(row);
 });
 
-// — Tool & state ————————————————————————————
+// — Wave fields —
+const pDisp=[], sDisp=[], pVel=[], sVel=[];
+for(let y=0;y<rows;y++){
+  pDisp[y]=new Float32Array(cols);
+  sDisp[y]=new Float32Array(cols);
+  pVel[y]=new Float32Array(cols);
+  sVel[y]=new Float32Array(cols);
+}
+function resetFields(){
+  for(let y=0;y<rows;y++){
+    pDisp[y].fill(0); sDisp[y].fill(0);
+    pVel[y].fill(0); sVel[y].fill(0);
+  }
+}
 
-let drawTool   = 'pen';
-let penWidth   = 1;
-let eraserSize = 1;
-let shapeStart = null;
-let preview    = null;
-let hollowMode = false;
-let originX    = null, originY = null;
-let simRunning = false;
-let savedMag   = 5.0;
-let lastMouse  = { x:0, y:0 };
+// — State & UI Bindings —
+let drawTool='origin', penW=1, eraserW=1, hollow=false;
+let originX=null, originY=null, simRunning=false, savedMag=5.0;
+let lastMouse={x:0,y:0}, preview=null, shapeStart=null;
 
-document.getElementById('penWidth').addEventListener('input', e=>{
-  penWidth = +e.target.value;
-  document.getElementById('penWidthLabel').innerText = penWidth;
-});
-document.getElementById('eraserSize').addEventListener('input', e=>{
-  eraserSize = +e.target.value;
-  document.getElementById('eraserSizeLabel').innerText = eraserSize;
-});
-document.getElementById('shapeHollow').addEventListener('change', e=>{
-  hollowMode = e.target.checked;
+const paintSelect = document.getElementById('paintMediumSelect');
+mediums.forEach(m=> paintSelect.add(new Option(m.name,m.id)));
+
+// Button helpers
+function activateButtons(btns, activeId){
+  btns.forEach(id=>{
+    const b=document.getElementById(id);
+    b.classList.toggle('active', id===activeId);
+  });
+}
+
+// Origin button: mutual exclusion with paint tools
+document.getElementById('originBtn').onclick = () => {
+  drawTool='origin';
+  // Activate origin button; deactivate paint buttons
+  activateButtons(['originBtn'], 'originBtn');
+  ['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'].forEach(pid=>{
+    document.getElementById(pid).classList.remove('active');
+  });
+};
+
+// Paint tool buttons: mutual exclusion with origin
+['pen','eraser','rect','sphere','fill'].forEach(tool=>{
+  document.getElementById(tool+'Btn').onclick = () => {
+    drawTool=tool;
+    // Activate only this paint button; deactivate others
+    activateButtons(['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'], tool+'Btn');
+    // Deactivate origin button
+    document.getElementById('originBtn').classList.remove('active');
+  };
 });
 
-const tools = { pen:'penTool', eraser:'eraserTool', rect:'rectTool',
-  sphere:'sphereTool', fill:'fillTool', origin:'originTool' };
-Object.entries(tools).forEach(([k,id])=>{
-  document.getElementById(id).addEventListener('click', ()=>{
-    if(simRunning) return;
-    Object.values(tools).forEach(i=>document.getElementById(i).classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    drawTool = k;
-    document.getElementById('toolLabel').innerText =
-      document.getElementById(id).innerText;
+// Pen/Eraser/Hollow sliders & checkbox
+document.getElementById('penWidth2').addEventListener('input', e=>{
+  penW=+e.target.value;
+  document.getElementById('penWidthLabel2').innerText=penW;
+});
+document.getElementById('eraserSize2').addEventListener('input', e=>{
+  eraserW=+e.target.value;
+  document.getElementById('eraserSizeLabel2').innerText=eraserW;
+});
+document.getElementById('shapeHollow2').addEventListener('change', e=>{
+  hollow = e.target.checked;
+});
+
+// Start/Replay/Reload & Magnitude
+const magInput = document.getElementById('mag');
+document.getElementById('startSim').onclick = () => {
+  if(originX!==null && !simRunning){
+    savedMag = +magInput.value;
+    resetFields(); inject(savedMag);
+    simRunning = true;
+    document.getElementById('startSim').disabled = true;
+  }
+};
+document.getElementById('replay').onclick = () => {
+  if(originX!==null){
+    resetFields(); inject(savedMag);
+    simRunning = true;
+  }
+};
+document.getElementById('reload').onclick = () => location.reload();
+
+// Terrain Gen parameters
+let noiseScale=0.1, waterTh=0.3, sandTh=0.4, rockTh=0.7;
+[
+  ['noiseScale','noiseScaleLabel','noiseScale'],
+  ['waterThresh','waterThreshLabel','waterTh'],
+  ['sandThresh','sandThreshLabel','sandTh'],
+  ['rockThresh','rockThreshLabel','rockTh']
+].forEach(([id,label,varName])=>{
+  document.getElementById(id).addEventListener('input', e=>{
+    const v=+e.target.value;
+    if(varName==='noiseScale') noiseScale=v;
+    else if(varName==='waterTh') waterTh=v;
+    else if(varName==='sandTh') sandTh=v;
+    else if(varName==='rockTh') rockTh=v;
+    document.getElementById(label).innerText=v.toFixed(2);
   });
 });
 
-// — Start / Replay / Reload ——————————————————
+// Simple deterministic noise function based on coordinates
+function noise(x, y) {
+  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
 
-document.getElementById('startSim').onclick = ()=>{
-  if(originX!==null && !simRunning){
-    savedMag = +document.getElementById('mag').value;
-    resetFields(); injectEarthquake(savedMag);
-    simRunning = true;
-    document.getElementById('startSim').style.display = 'none';
-    document.getElementById('reload').style.display    = 'inline-block';
-    document.getElementById('replay').style.display    = 'inline-block';
+document.getElementById('generateTerrain').onclick = () => {
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if (x===0||y===0||x===cols-1||y===rows-1) {
+        mediumGrid[y][x] = 1; // border
+      } else {
+        const nx = x * noiseScale;
+        const ny = y * noiseScale;
+        const v = noise(nx, ny);
+        let m;
+        if (v < waterTh) {
+          m = 2; // Water
+        } else if (v < sandTh) {
+          m = 3; // Sand
+        } else if (v < rockTh) {
+          m = 0; // Soft Soil
+        } else {
+          m = 4; // Rock
+        }
+        mediumGrid[y][x] = m;
+      }
+    }
   }
 };
-document.getElementById('replay').onclick = ()=>{
-  if(originX!==null){
-    resetFields(); injectEarthquake(savedMag);
-    simRunning = true;
-  }
-};
-document.getElementById('reload').onclick = ()=> location.reload();
 
-// — Mouse events —————————————————————————————
-
+// — Mouse & Painting/Origin —
 canvas.addEventListener('mousemove', e=>{
-  const {x,y}=toGrid(e);
-  if(x<0||x>=cols||y<0||y>=rows) return;
-  lastMouse={x,y};
+  const gm = toGrid(e);
+  if(!gm) return;
+  lastMouse=gm;
   if(e.buttons && !simRunning){
-    paintTool(x,y);
-    if((drawTool==='rect'||drawTool==='sphere') && shapeStart){
-      preview={tool:drawTool,x0:shapeStart.x,y0:shapeStart.y,x1:x,y1:y};
+    paintAt(gm.x,gm.y);
+    if((drawTool==='rect'||drawTool==='sphere')&& shapeStart){
+      preview={tool:drawTool,x0:shapeStart.x,y0:shapeStart.y,x1:gm.x,y1:gm.y};
     }
   }
 });
 canvas.addEventListener('mousedown', e=>{
-  if(simRunning) return;
-  const {x,y}=lastMouse;
-  if(drawTool==='pen') paintPen(x,y);
-  if(drawTool==='eraser') paintEraser(x,y);
-  if(drawTool==='fill') paintFill(x,y);
+  const gm=toGrid(e); if(!gm)return;
+  if(drawTool==='origin'&& mediumGrid[gm.y][gm.x]!==1){
+    originX=gm.x; originY=gm.y;
+    document.getElementById('startSim').disabled=false;
+  } else paintAt(gm.x,gm.y);
   if(drawTool==='rect'||drawTool==='sphere'){
-    shapeStart={x,y}; preview=null;
-  }
-  if(drawTool==='origin' && mediumGrid[y][x]!==1){
-    originX=x; originY=y;
-    document.getElementById('startSim').style.display='inline-block';
+    shapeStart={...gm}; preview=null;
   }
 });
 window.addEventListener('mouseup', ()=>{
-  if(shapeStart && preview) finalizeShape(preview);
+  if(shapeStart&&preview) finalizeShape(preview);
   shapeStart=null; preview=null;
 });
 
-// — Helpers —————————————————————————————
-
 function toGrid(e){
   const r=canvas.getBoundingClientRect();
-  return {
-    x:Math.floor((e.clientX-r.left)/cellW),
-    y:Math.floor((e.clientY-r.top)/cellH)
-  };
+  const x=Math.floor((e.clientX-r.left)/cellW), y=Math.floor((e.clientY-r.top)/cellH);
+  return x>=0&&x<cols&&y>=0&&y<rows ? {x,y} : null;
 }
 
-function paintTool(x,y){
-  if(drawTool==='pen')    paintPen(x,y);
-  if(drawTool==='eraser') paintEraser(x,y);
-  if(drawTool==='fill')   paintFill(x,y);
-}
-function paintPen(cx,cy){
+function paintAt(cx,cy){
   const mid=+paintSelect.value;
-  for(let dy=-penWidth;dy<=penWidth;dy++){
-    for(let dx=-penWidth;dx<=penWidth;dx++){
+  if(drawTool==='pen'){
+    for(let dy=-penW;dy<=penW;dy++)for(let dx=-penW;dx<=penW;dx++){
       const nx=cx+dx, ny=cy+dy;
-      if(nx>=0&&nx<cols&&ny>=0&&ny<rows) mediumGrid[ny][nx]=mid;
+      if(nx>=0&&ny>=0&&nx<cols&&ny<rows) mediumGrid[ny][nx]=mid;
+    }
+  }
+  if(drawTool==='eraser'){
+    for(let dy=-eraserW;dy<=eraserW;dy++)for(let dx=-eraserW;dx<=eraserW;dx++){
+      const nx=cx+dx, ny=cy+dy;
+      if(nx>=0&&ny>=0&&nx<cols&&ny<rows) mediumGrid[ny][nx]=0;
+    }
+  }
+  if(drawTool==='fill'){
+    const target=mediumGrid[cy][cx];
+    if(target===mid) return;
+    const stk=[{x:cx,y:cy}];
+    while(stk.length){
+      const p=stk.pop();
+      if(p.x<0||p.y<0||p.x>=cols||p.y>=rows) continue;
+      if(mediumGrid[p.y][p.x]!==target) continue;
+      mediumGrid[p.y][p.x]=mid;
+      stk.push({x:p.x+1,y:p.y},{x:p.x-1,y:p.y},{x:p.x,y:p.y+1},{x:p.x,y:p.y-1});
     }
   }
 }
-function paintEraser(cx,cy){
-  for(let dy=-eraserSize;dy<=eraserSize;dy++){
-    for(let dx=-eraserSize;dx<=eraserSize;dx++){
-      const nx=cx+dx, ny=cy+dy;
-      if(nx>=0&&nx<cols&&ny>=0&&ny<rows) mediumGrid[ny][nx]=0;
-    }
-  }
-}
-function paintFill(sx,sy){
-  const target=mediumGrid[sy][sx], repl=+paintSelect.value;
-  if(target===repl) return;
-  const stk=[{x:sx,y:sy}];
-  while(stk.length){
-    const {x,y}=stk.pop();
-    if(x<0||x>=cols||y<0||y>=rows) continue;
-    if(mediumGrid[y][x]!==target) continue;
-    mediumGrid[y][x]=repl;
-    stk.push({x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1});
-  }
-}
+
 function finalizeShape({tool,x0,y0,x1,y1}){
   const mid=+paintSelect.value;
   const xmin=Math.min(x0,x1), xmax=Math.max(x0,x1);
   const ymin=Math.min(y0,y1), ymax=Math.max(y0,y1);
   if(tool==='rect'){
-    if(hollowMode){
-      for(let x=xmin;x<=xmax;x++){
-        mediumGrid[ymin][x]=mediumGrid[ymax][x]=mid;
-      }
-      for(let y=ymin;y<=ymax;y++){
-        mediumGrid[y][xmin]=mediumGrid[y][xmax]=mid;
-      }
+    if(hollow){
+      for(let x=xmin;x<=xmax;x++){ mediumGrid[ymin][x]=mid; mediumGrid[ymax][x]=mid; }
+      for(let y=ymin;y<=ymax;y++){ mediumGrid[y][xmin]=mid; mediumGrid[y][xmax]=mid; }
     } else {
-      for(let y=ymin;y<=ymax;y++)
-        for(let x=xmin;x<=xmax;x++)
-          mediumGrid[y][x]=mid;
+      for(let y=ymin;y<=ymax;y++)for(let x=xmin;x<=xmax;x++) mediumGrid[y][x]=mid;
     }
   } else {
     const rx=Math.abs(x1-x0), ry=Math.abs(y1-y0);
-    if(hollowMode){
-      for(let i=0;i<360;i++){
-        const θ=i/360*2*Math.PI;
-        const fx=x0+Math.cos(θ)*rx, fy=y0+Math.sin(θ)*ry;
-        const ix=Math.round(fx), iy=Math.round(fy);
-        if(ix>=0&&ix<cols&&iy>=0&&iy<rows) mediumGrid[iy][ix]=mid;
+    if(rx===0 || ry===0) {
+      if(hollow) {
+        if(rx===0) {
+          for(let y=ymin;y<=ymax;y++) mediumGrid[y][x0]=mid;
+        } else {
+          for(let x=xmin;x<=xmax;x++) mediumGrid[y0][x]=mid;
+        }
+      } else {
+        if(rx===0) {
+          for(let y=ymin;y<=ymax;y++) mediumGrid[y][x0]=mid;
+        } else {
+          for(let x=xmin;x<=xmax;x++) mediumGrid[y0][x]=mid;
+        }
       }
     } else {
-      for(let y=0;y<rows;y++){
-        for(let x=0;x<cols;x++){
-          if(((x-x0)/rx)**2+((y-y0)/ry)**2<=1)
-            mediumGrid[y][x]=mid;
+      if(hollow){
+        for(let i=0;i<360;i++){
+          const θ=i/360*2*Math.PI;
+          const ix=Math.round(x0+Math.cos(θ)*rx),
+                iy=Math.round(y0+Math.sin(θ)*ry);
+          if(ix>=0&&iy>=0&&ix<cols&&iy<rows) mediumGrid[iy][ix]=mid;
+        }
+      } else {
+        for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+          if(((x-x0)/rx)**2+((y-y0)/ry)**2<=1) mediumGrid[y][x]=mid;
         }
       }
     }
   }
 }
 
-// — Physics & rendering —————————————————————
-
-const kmPerCell=0.5, fixedDt=0.01, pVelKM=6.0, sVelKM=3.5;
-
+// — Physics & rendering —
+const km=0.5, dtFixed=0.01, pSpeed=6, sSpeed=3.5;
 function updatePhysics(dt){
-  const baseVp=(pVelKM*dt/kmPerCell)**2, baseVs=(sVelKM*dt/kmPerCell)**2;
-  for(let y=1;y<rows-1;y++){
-    for(let x=1;x<cols-1;x++){
-      const lapP=pDisp[y][x+1]+pDisp[y][x-1]+pDisp[y+1][x]+pDisp[y-1][x]-4*pDisp[y][x];
-      const lapS=sDisp[y][x+1]+sDisp[y][x-1]+sDisp[y+1][x]+sDisp[y-1][x]-4*sDisp[y][x];
-      const m=mediums[ mediumGrid[y][x] ];
-      pVel[y][x]+=baseVp*lapP*m.speed;
-      sVel[y][x]+=baseVs*lapS*m.speed;
-      pVel[y][x]*=m.damping; sVel[y][x]*=m.damping;
-    }
+  const vp=(pSpeed*dt/km)**2, vs=(sSpeed*dt/km)**2;
+  for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+    const lapP=pDisp[y][x+1]+pDisp[y][x-1]+pDisp[y+1][x]+pDisp[y-1][x]-4*pDisp[y][x];
+    const lapS=sDisp[y][x+1]+sDisp[y][x-1]+sDisp[y+1][x]+sDisp[y-1][x]-4*sDisp[y][x];
+    const m=mediums[ mediumGrid[y][x] ];
+    pVel[y][x]+=vp*lapP*m.speed; sVel[y][x]+=vs*lapS*m.speed;
+    pVel[y][x]*=m.damping; sVel[y][x]*=m.damping;
   }
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      const m=mediums[ mediumGrid[y][x] ];
-      if(!m.propagate()){
-        pVel[y][x]*=-0.5; sVel[y][x]*=-0.5;
-      }
-      pDisp[y][x]+=pVel[y][x];
-      sDisp[y][x]+=sVel[y][x];
-    }
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const m=mediums[ mediumGrid[y][x] ];
+    if(!m.propagate()){ pVel[y][x]*=-0.5; sVel[y][x]*=-0.5; }
+    pDisp[y][x]+=pVel[y][x]; sDisp[y][x]+=sVel[y][x];
   }
 }
-
-function injectEarthquake(mag){
+function inject(mag){
   const r=3;
-  for(let dy=-r;dy<=r;dy++){
-    for(let dx=-r;dx<=r;dx++){
-      const ix=originX+dx, iy=originY+dy;
-      if(ix<0||ix>=cols||iy<0||iy>=rows) continue;
-      const d=Math.hypot(dx,dy), amp=mag*Math.exp(-d);
-      pDisp[iy][ix]+=amp; sDisp[iy][ix]+=amp*0.8;
-    }
+  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+    const ix=originX+dx, iy=originY+dy;
+    if(ix<0||iy<0||ix>=cols||iy>=rows) continue;
+    const d=Math.hypot(dx,dy), amp=mag*Math.exp(-d);
+    pDisp[iy][ix]+=amp; sDisp[iy][ix]+=amp*0.8;
   }
 }
-
 function clamp(v){return Math.max(0,Math.min(255,Math.round(v)));}
 
 function draw(){
-  // medium background
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      ctx.fillStyle=mediums[ mediumGrid[y][x] ].color;
-      ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
-    }
+  // draw medium background
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    ctx.fillStyle=mediums[ mediumGrid[y][x] ].color;
+    ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
   }
-  // waves (60% opacity)
+  // overlay waves
   ctx.globalAlpha=0.6;
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      if(mediums[ mediumGrid[y][x] ].reflect) continue;
-      const p=pDisp[y][x], s=sDisp[y][x];
-      const r=clamp(128+127*(p-s));
-      const g=clamp(128+127*(s-p));
-      const b=clamp(128-127*(p+s));
-      ctx.fillStyle=`rgb(${r},${g},${b})`;
-      ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
-    }
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    if(mediums[ mediumGrid[y][x] ].reflect) continue;
+    const p=pDisp[y][x], s=sDisp[y][x];
+    const r=clamp(128+127*(p-s)), g=clamp(128+127*(s-p)), b=clamp(128-127*(p+s));
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
   }
   ctx.globalAlpha=1;
-  // epicenter
+  // draw origin if set
   if(originX!==null){
     ctx.fillStyle='lime';
     ctx.fillRect(originX*cellW,originY*cellH,cellW,cellH);
   }
-  // preview
   drawPreview();
 }
 
 function drawPreview(){
   ctx.strokeStyle='yellow'; ctx.lineWidth=2;
   if(drawTool==='pen'){
-    const w=penWidth;
+    const w=penW;
     ctx.strokeRect((lastMouse.x-w)*cellW,(lastMouse.y-w)*cellH,(2*w+1)*cellW,(2*w+1)*cellH);
   }
   if(drawTool==='eraser'){
-    const r=eraserSize;
+    const r=eraserW;
     ctx.strokeRect((lastMouse.x-r)*cellW,(lastMouse.y-r)*cellH,(2*r+1)*cellW,(2*r+1)*cellH);
   }
   if(preview){
@@ -343,17 +414,14 @@ function drawPreview(){
   }
 }
 
-// animation
+// Animation loop
 let lastTs=0, acc=0;
 function loop(ts){
   if(!lastTs) lastTs=ts;
   const dt=(ts-lastTs)/1000; lastTs=ts;
   if(simRunning){
     acc+=dt;
-    while(acc>=fixedDt){
-      updatePhysics(fixedDt);
-      acc-=fixedDt;
-    }
+    while(acc>=dtFixed){ updatePhysics(dtFixed); acc-=dtFixed; }
   }
   ctx.clearRect(0,0,canvas.width,canvas.height);
   draw();
