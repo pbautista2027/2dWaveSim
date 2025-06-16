@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Seismic Simulator with Mediums</title>
+  <title>Seismic Simulator</title>
   <style>
     html, body { margin:0; padding:0; background:black; overflow:hidden; }
     #ui {
       position:absolute; top:10px; left:10px;
       background:rgba(255,255,255,0.95); padding:10px;
-      font-family:sans-serif; font-size:14px; z-index:10; max-width:400px;
+      font-family:sans-serif; font-size:14px; z-index:10; max-width:360px;
     }
-    #tools, #mediumControls { margin-bottom:8px; }
+    #tools, #mediumControls, #legends { margin-bottom:8px; }
     .tool-btn {
       padding:4px 8px; margin:2px; border:1px solid #888;
       background:#eee; cursor:pointer;
@@ -20,25 +20,30 @@
     }
     .control-group { margin-top:8px; }
     .control-group label { margin-right:8px; }
+    details { margin-top:8px; }
+    details summary {
+      cursor: pointer;
+      font-weight: bold;
+      outline: none;
+    }
+    details ul { padding-left: 1.2em; margin:4px 0; }
+    details li { margin:2px 0; }
+    .color-swatch {
+      display:inline-block;
+      width:1em; height:1em;
+      margin-right:0.4em;
+      vertical-align:middle;
+    }
     canvas { display:block; width:100vw; height:100vh; background:black; }
     #startSim, #reload, #replay { display:none; margin-top:10px; }
-    .legend { margin-top:10px; font-size:12px; line-height:1.4em; }
-    .legend div::before {
-      content:'⬤ '; display:inline-block; width:1.2em; font-size:14px;
-    }
   </style>
 </head>
 <body>
   <div id="ui">
 
-    <!-- Medium Picker -->
+    <!-- Paint‐Medium Picker Only -->
     <div id="mediumControls">
-      <label>Base Medium:
-        <select id="baseMediumSelect"></select>
-      </label>
-      <button id="fillBase">Fill Canvas</button>
-      <label style="margin-left:12px">
-        Paint Medium:
+      <label>Paint Medium:
         <select id="paintMediumSelect"></select>
       </label>
     </div>
@@ -55,19 +60,19 @@
 
     <div>Current Tool: <strong id="toolLabel">Pen</strong></div>
 
-    <div class="control-group" id="penWidthContainer">
+    <div class="control-group">
       <label>Pen Width:
         <span id="penWidthLabel">1</span>
       </label>
       <input id="penWidth" type="range" min="1" max="10" value="1">
     </div>
-    <div class="control-group" id="eraserSizeContainer">
+    <div class="control-group">
       <label>Eraser Size:
         <span id="eraserSizeLabel">1</span>
       </label>
       <input id="eraserSize" type="range" min="1" max="20" value="1">
     </div>
-    <div class="control-group" id="shapeOptions">
+    <div class="control-group">
       <label>
         <input type="checkbox" id="shapeHollow">
         Hollow Shapes
@@ -85,7 +90,23 @@
     <button id="replay">Replay Simulation</button>
     <button id="reload">Reload Simulation</button>
 
-    <div class="legend" id="legend"></div>
+    <!-- Medium Legend -->
+    <div id="legends">
+      <strong>Mediums:</strong>
+      <div id="mediumLegend"></div>
+    </div>
+
+    <!-- Wave Legend as collapsible -->
+    <details>
+      <summary>Wave Color Legend</summary>
+      <ul>
+        <li><span class="color-swatch" style="background:red"></span>Positive P-wave</li>
+        <li><span class="color-swatch" style="background:cyan"></span>Negative P-wave</li>
+        <li><span class="color-swatch" style="background:green"></span>Positive S-wave</li>
+        <li><span class="color-swatch" style="background:magenta"></span>Negative S-wave</li>
+        <li><span class="color-swatch" style="background:gray"></span>Neutral (zero)</li>
+      </ul>
+    </details>
   </div>
 
   <canvas id="canvas"></canvas>
