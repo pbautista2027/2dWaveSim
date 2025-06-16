@@ -81,20 +81,20 @@
     const dt = 0.01;
     const Vp = 6.0, Vs = 3.5;
 
-    let cellW, cellH;
+    var cellW, cellH;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     cellW = canvas.width / cols;
     cellH = canvas.height / rows;
 
-    let simRunning = false;
-    let drawTool = 'pen';
-    let isDrawing = false;
-    let originX = null, originY = null;
-    let storedMag = 5.0;
+    var simRunning = false;
+    var drawTool = 'pen';
+    var isDrawing = false;
+    var originX = null, originY = null;
+    var storedMag = 5.0;
 
     const fieldV = [], fieldH = [], velV = [], velH = [], borders = [];
-    for (let y = 0; y < rows; y++) {
+    for (var y = 0; y < rows; y++) {
       fieldV[y] = new Float32Array(cols);
       fieldH[y] = new Float32Array(cols);
       velV[y] = new Float32Array(cols);
@@ -103,7 +103,7 @@
     }
 
     function resetFields() {
-      for (let y = 0; y < rows; y++) {
+      for (var y = 0; y < rows; y++) {
         fieldV[y].fill(0);
         fieldH[y].fill(0);
         velV[y].fill(0);
@@ -122,17 +122,17 @@
 
     function drawGrid() {
       ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      for (let x = 0; x <= cols; x++) {
+      for (var x = 0; x <= cols; x++) {
         ctx.beginPath(); ctx.moveTo(x * cellW, 0); ctx.lineTo(x * cellW, canvas.height); ctx.stroke();
       }
-      for (let y = 0; y <= rows; y++) {
+      for (var y = 0; y <= rows; y++) {
         ctx.beginPath(); ctx.moveTo(0, y * cellH); ctx.lineTo(canvas.width, y * cellH); ctx.stroke();
       }
     }
 
     function drawWaves() {
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
+      for (var y = 0; y < rows; y++) {
+        for (var x = 0; x < cols; x++) {
           if (borders[y][x]) continue;
 
           const p = fieldV[y][x];
@@ -155,8 +155,8 @@
 
     function drawBorders() {
       ctx.fillStyle = "#00f";
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
+      for (var y = 0; y < rows; y++) {
+        for (var x = 0; x < cols; x++) {
           if (borders[y][x]) ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
         }
       }
@@ -167,8 +167,8 @@
       const scaleVp = (Vp * dt / kmPerCell) ** 2;
       const scaleVs = (Vs * dt / kmPerCell) ** 2;
 
-      for (let y = 1; y < rows - 1; y++) {
-        for (let x = 1; x < cols - 1; x++) {
+      for (var y = 1; y < rows - 1; y++) {
+        for (var x = 1; x < cols - 1; x++) {
           if (borders[y][x]) continue;
           const lapV = fieldV[y][x+1] + fieldV[y][x-1] + fieldV[y+1][x] + fieldV[y-1][x] - 4 * fieldV[y][x];
           const lapH = fieldH[y][x+1] + fieldH[y][x-1] + fieldH[y+1][x] + fieldH[y-1][x] - 4 * fieldH[y][x];
@@ -178,8 +178,8 @@
           velH[y][x] *= 0.99;
         }
       }
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
+      for (var y = 0; y < rows; y++) {
+        for (var x = 0; x < cols; x++) {
           if (borders[y][x]) {
             velV[y][x] *= -0.5;
             velH[y][x] *= -0.5;
@@ -251,8 +251,8 @@
 
     function injectEarthquake(mag) {
       const r = 3;
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
+      for (var dy = -r; dy <= r; dy++) {
+        for (var dx = -r; dx <= r; dx++) {
           const ix = originX + dx;
           const iy = originY + dy;
           if (ix >= 0 && ix < cols && iy >= 0 && iy < rows) {
