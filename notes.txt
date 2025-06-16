@@ -5,3 +5,9 @@ it so the button dissapears if the pen tool is not selected and move the border 
 to the medium selection too and theres a bug where the mediums do not show up when i draw
 them but the functions are there so please fix that and change the logic of the mediums
 because s waves and p waves behave differntly through them right so fix that too
+
+medium most resistant to quakes to implement
+different types of seismic waves
+more customizablity
+easier ui (parang mspaint)
+add terrain generation similar to the philippines
