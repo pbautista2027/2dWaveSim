@@ -93,8 +93,8 @@ function updatePhysics(dt) {
       const lapS = sWaveDisplacement[y][x+1] + sWaveDisplacement[y][x-1] + sWaveDisplacement[y+1][x] + sWaveDisplacement[y-1][x] - 4 * sWaveDisplacement[y][x];
       pWaveVelocity[y][x] += scaleVp * lapP;
       sWaveVelocity[y][x] += scaleVs * lapS;
-      pWaveVelocity[y][x] *= 0.99;
-      sWaveVelocity[y][x] *= 0.99;
+      pWaveVelocity[y][x] *= 0.995;
+      sWaveVelocity[y][x] *= 0.995;
     }
   }
 for (var y = 0; y < rows; y++) {
