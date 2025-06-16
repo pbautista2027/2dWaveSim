@@ -120,8 +120,16 @@ let drawTool='origin', penW=1, eraserW=1, hollow=false;
 let originX=null, originY=null, simRunning=false, savedMag=5.0;
 let lastMouse={x:0,y:0}, preview=null, shapeStart=null;
 
+const originBtn = document.getElementById('originBtn');
+const startBtn = document.getElementById('startSim');
+const replayBtn = document.getElementById('replay');
+const reloadBtn = document.getElementById('reload');
+const magInput = document.getElementById('mag');
+
 const paintSelect = document.getElementById('paintMediumSelect');
 mediums.forEach(m=> paintSelect.add(new Option(m.name,m.id)));
+
+const paintButtons = ['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'].map(id=>document.getElementById(id));
 
 // Button helpers
 function activateButtons(btns, activeId){
@@ -131,25 +139,60 @@ function activateButtons(btns, activeId){
   });
 }
 
+// Update UI enabled/disabled state based on originX and simRunning
+function updateUIState(){
+  // Start button: enabled only if origin is chosen and simulation not running
+  startBtn.disabled = simRunning || originX===null;
+  // Replay & Reload: enabled only when simulation is running
+  replayBtn.disabled = !simRunning;
+  reloadBtn.disabled = !simRunning;
+  // Origin button: disabled while simulation is running
+  originBtn.disabled = simRunning;
+  // Paint tools & paint inputs: disabled while simulation is running
+  paintButtons.forEach(b=> b.disabled = simRunning);
+  document.getElementById('penWidth2').disabled = simRunning;
+  document.getElementById('eraserSize2').disabled = simRunning;
+  document.getElementById('shapeHollow2').disabled = simRunning;
+  paintSelect.disabled = simRunning;
+
+  // Magnitude input disabled while running
+  magInput.disabled = simRunning;
+
+  // Terrain generation controls disabled while running
+  document.getElementById('noiseScale').disabled = simRunning;
+  document.getElementById('waterThresh').disabled = simRunning;
+  document.getElementById('sandThresh').disabled = simRunning;
+  document.getElementById('rockThresh').disabled = simRunning;
+  document.getElementById('generateTerrain').disabled = simRunning;
+}
+
+// Initialize UI state on load
+updateUIState();
+
 // Origin button: mutual exclusion with paint tools
-document.getElementById('originBtn').onclick = () => {
+originBtn.addEventListener('click', () => {
+  if(simRunning) return; // should be disabled already
   drawTool='origin';
   // Activate origin button; deactivate paint buttons
   activateButtons(['originBtn'], 'originBtn');
-  ['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'].forEach(pid=>{
-    document.getElementById(pid).classList.remove('active');
-  });
-};
+  paintButtons.forEach(b=>b.classList.remove('active'));
+  // Once origin chosen, update UI
+  updateUIState();
+});
 
 // Paint tool buttons: mutual exclusion with origin
-['pen','eraser','rect','sphere','fill'].forEach(tool=>{
-  document.getElementById(tool+'Btn').onclick = () => {
-    drawTool=tool;
+paintButtons.forEach(btnEl => {
+  btnEl.addEventListener('click', () => {
+    if(simRunning) return; // should be disabled
+    const id = btnEl.id; // e.g. 'penBtn'
+    const tool = id.replace('Btn',''); // 'pen', etc.
+    drawTool = tool;
     // Activate only this paint button; deactivate others
-    activateButtons(['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'], tool+'Btn');
+    activateButtons(['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'], id);
     // Deactivate origin button
-    document.getElementById('originBtn').classList.remove('active');
-  };
+    originBtn.classList.remove('active');
+    updateUIState();
+  });
 });
 
 // Pen/Eraser/Hollow sliders & checkbox
@@ -166,22 +209,25 @@ document.getElementById('shapeHollow2').addEventListener('change', e=>{
 });
 
 // Start/Replay/Reload & Magnitude
-const magInput = document.getElementById('mag');
-document.getElementById('startSim').onclick = () => {
+startBtn.addEventListener('click', () => {
   if(originX!==null && !simRunning){
     savedMag = +magInput.value;
     resetFields(); inject(savedMag);
     simRunning = true;
-    document.getElementById('startSim').disabled = true;
+    updateUIState();
   }
-};
-document.getElementById('replay').onclick = () => {
-  if(originX!==null){
+});
+replayBtn.addEventListener('click', () => {
+  if(originX!==null && simRunning){
     resetFields(); inject(savedMag);
-    simRunning = true;
+    updateUIState();
   }
-};
-document.getElementById('reload').onclick = () => location.reload();
+});
+reloadBtn.addEventListener('click', () => {
+  if(simRunning){
+    location.reload();
+  }
+});
 
 // Terrain Gen parameters
 let noiseScale=0.1, waterTh=0.3, sandTh=0.4, rockTh=0.7;
@@ -208,6 +254,7 @@ function noise(x, y) {
 }
 
 document.getElementById('generateTerrain').onclick = () => {
+  if(simRunning) return; // disabled by UI
   for(let y=0;y<rows;y++){
     for(let x=0;x<cols;x++){
       if (x===0||y===0||x===cols-1||y===rows-1) {
@@ -233,11 +280,13 @@ document.getElementById('generateTerrain').onclick = () => {
 };
 
 // — Mouse & Painting/Origin —
+// Prevent any painting/origin changes while simRunning
 canvas.addEventListener('mousemove', e=>{
+  if(simRunning) return;
   const gm = toGrid(e);
   if(!gm) return;
   lastMouse=gm;
-  if(e.buttons && !simRunning){
+  if(e.buttons){
     paintAt(gm.x,gm.y);
     if((drawTool==='rect'||drawTool==='sphere')&& shapeStart){
       preview={tool:drawTool,x0:shapeStart.x,y0:shapeStart.y,x1:gm.x,y1:gm.y};
@@ -245,16 +294,20 @@ canvas.addEventListener('mousemove', e=>{
   }
 });
 canvas.addEventListener('mousedown', e=>{
+  if(simRunning) return;
   const gm=toGrid(e); if(!gm)return;
   if(drawTool==='origin'&& mediumGrid[gm.y][gm.x]!==1){
     originX=gm.x; originY=gm.y;
-    document.getElementById('startSim').disabled=false;
-  } else paintAt(gm.x,gm.y);
+    updateUIState();
+  } else {
+    paintAt(gm.x,gm.y);
+  }
   if(drawTool==='rect'||drawTool==='sphere'){
     shapeStart={...gm}; preview=null;
   }
 });
 window.addEventListener('mouseup', ()=>{
+  if(simRunning) return;
   if(shapeStart&&preview) finalizeShape(preview);
   shapeStart=null; preview=null;
 });
@@ -266,6 +319,7 @@ function toGrid(e){
 }
 
 function paintAt(cx,cy){
+  if(simRunning) return;
   const mid=+paintSelect.value;
   if(drawTool==='pen'){
     for(let dy=-penW;dy<=penW;dy++)for(let dx=-penW;dx<=penW;dx++){
@@ -294,6 +348,7 @@ function paintAt(cx,cy){
 }
 
 function finalizeShape({tool,x0,y0,x1,y1}){
+  if(simRunning) return;
   const mid=+paintSelect.value;
   const xmin=Math.min(x0,x1), xmax=Math.max(x0,x1);
   const ymin=Math.min(y0,y1), ymax=Math.max(y0,y1);

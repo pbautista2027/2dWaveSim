@@ -1,9 +1,8 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Seismic Simulator Step 3 (Fixed UI)</title>
+  <title>Seismic Simulator</title>
   <style>
     html, body {
       margin:0; padding:0;
@@ -59,11 +58,18 @@
     .window button.active {
       background:#4285f4; color:white; border-color:#2a56c6;
     }
+    .window button:disabled {
+      background:#ccc; color:#666; border-color:#999; cursor:not-allowed;
+    }
     .window label {
       display:block; margin:6px 0; font-size:14px;
     }
     .window input[type="range"], .window input[type="number"], .window select {
       width:100%; margin:4px 0; box-sizing:border-box; padding:4px;
+    }
+    .window input:disabled,
+    .window select:disabled {
+      background: #f0f0f0; cursor: not-allowed;
     }
 
     /* Top-right global controls */
@@ -92,7 +98,7 @@
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
-      <button id="originBtn">Origin</button>
+      <button id="originBtn" class="active">Origin</button>
       <label>Magnitude:
         <input id="mag" type="number" min="5.0" max="6.6" step="0.1" value="5.0">
       </label>
@@ -102,16 +108,17 @@
 
       <details style="margin-top:8px;">
         <summary>Medium Legend</summary>
-        <div id="mediumLegend"></div>
+        <div id="mediumLegend">
+          <span style="margin-top:8px;">&nbsp;</span>
+        </div>
       </details>
       <details style="margin-top:8px;">
         <summary>Wave Legend</summary>
-        <ul style="padding-left:1.2em; color:#111;">
+        <ul style="padding-left:1.2em; color:#111">
           <li><span style="display:inline-block;width:1em;height:1em;background:red;margin-right:4px"></span>P (+)</li>
           <li><span style="display:inline-block;width:1em;height:1em;background:cyan;margin-right:4px"></span>P (−)</li>
           <li><span style="display:inline-block;width:1em;height:1em;background:green;margin-right:4px"></span>S (+)</li>
           <li><span style="display:inline-block;width:1em;height:1em;background:magenta;margin-right:4px"></span>S (−)</li>
-          <li><span style="display:inline-block;width:1em;height:1em;background:gray;margin-right:4px"></span>Neutral</li>
         </ul>
       </details>
     </div>
@@ -123,7 +130,7 @@
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
-      <button id="penBtn" class="active">Pen</button>
+      <button id="penBtn">Pen</button>
       <button id="eraserBtn">Eraser</button>
       <button id="rectBtn">Rectangle</button>
       <button id="sphereBtn">Sphere</button>
