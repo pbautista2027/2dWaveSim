@@ -19,7 +19,7 @@ const windowDefaults = {
 };
 
 document.getElementById('resetAll').onclick = () => {
-  // Reposition windows to defaults, keep their open/closed state unchanged.
+  // Reposition windows to defaults, keep open/closed state unchanged.
   dropdowns.forEach(d => {
     const def = windowDefaults[d.id];
     if (def) {
@@ -116,8 +116,10 @@ function resetFields(){
 }
 
 // — State & UI Bindings —
+// drawTool can be 'origin' (for adding origins) or paint tools
 let drawTool='origin', penW=1, eraserW=1, hollow=false;
-let originX=null, originY=null, simRunning=false, savedMag=5.0;
+let origins = []; // Array of {x, y, mag}
+let simRunning=false;
 let lastMouse={x:0,y:0}, preview=null, shapeStart=null;
 
 const originBtn = document.getElementById('originBtn');
@@ -131,6 +133,9 @@ mediums.forEach(m=> paintSelect.add(new Option(m.name,m.id)));
 
 const paintButtons = ['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'].map(id=>document.getElementById(id));
 
+const originsListDiv = document.getElementById('originsList');
+const clearOriginsBtn = document.getElementById('clearOriginsBtn');
+
 // Button helpers
 function activateButtons(btns, activeId){
   btns.forEach(id=>{
@@ -139,10 +144,10 @@ function activateButtons(btns, activeId){
   });
 }
 
-// Update UI enabled/disabled state based on originX and simRunning
+// Update UI enabled/disabled state based on origins.length and simRunning
 function updateUIState(){
-  // Start button: enabled only if origin is chosen and simulation not running
-  startBtn.disabled = simRunning || originX===null;
+  // Start button: enabled only if at least one origin exists and simulation not running
+  startBtn.disabled = simRunning || origins.length===0;
   // Replay & Reload: enabled only when simulation is running
   replayBtn.disabled = !simRunning;
   reloadBtn.disabled = !simRunning;
@@ -155,7 +160,7 @@ function updateUIState(){
   document.getElementById('shapeHollow2').disabled = simRunning;
   paintSelect.disabled = simRunning;
 
-  // Magnitude input disabled while running
+  // Global magnitude input disabled while running
   magInput.disabled = simRunning;
 
   // Terrain generation controls disabled while running
@@ -164,32 +169,101 @@ function updateUIState(){
   document.getElementById('sandThresh').disabled = simRunning;
   document.getElementById('rockThresh').disabled = simRunning;
   document.getElementById('generateTerrain').disabled = simRunning;
+
+  // Origins list: disable remove buttons & clear if simRunning
+  const removeButtons = originsListDiv.querySelectorAll('.remove-origin');
+  removeButtons.forEach(btn => btn.disabled = simRunning);
+  // Also disable per-origin magnitude inputs
+  const magInputs = originsListDiv.querySelectorAll('.origin-mag');
+  magInputs.forEach(inp => inp.disabled = simRunning);
+
+  clearOriginsBtn.disabled = simRunning;
 }
 
 // Initialize UI state on load
 updateUIState();
 
+// Function to refresh the origins list UI
+function refreshOriginsList(){
+  originsListDiv.innerHTML = '';
+  if(origins.length === 0){
+    const placeholder = document.createElement('div');
+    placeholder.style.fontSize = '13px';
+    placeholder.style.color = '#666';
+    placeholder.textContent = 'No origins yet';
+    originsListDiv.appendChild(placeholder);
+  } else {
+    origins.forEach((pt, idx) => {
+      const item = document.createElement('div');
+      item.className = 'origin-item';
+      // Coordinate + magnitude input
+      const leftDiv = document.createElement('div');
+      leftDiv.style.display = 'flex';
+      leftDiv.style.alignItems = 'center';
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = `(${pt.x},${pt.y})`;
+      labelSpan.style.marginRight = '4px';
+      const magInp = document.createElement('input');
+      magInp.type = 'number';
+      magInp.min = '0';
+      magInp.step = '0.1';
+      magInp.value = pt.mag.toFixed(1);
+      magInp.className = 'origin-mag';
+      magInp.title = 'Magnitude for this origin';
+      magInp.addEventListener('input', () => {
+        let v = parseFloat(magInp.value);
+        if (isNaN(v) || v < 0) v = 0;
+        pt.mag = v;
+        magInp.value = v.toFixed(1);
+      });
+      leftDiv.appendChild(labelSpan);
+      leftDiv.appendChild(magInp);
+
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-origin';
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove this origin';
+      removeBtn.addEventListener('click', () => {
+        if(simRunning) return;
+        origins.splice(idx,1);
+        refreshOriginsList();
+        updateUIState();
+      });
+
+      item.appendChild(leftDiv);
+      item.appendChild(removeBtn);
+      originsListDiv.appendChild(item);
+    });
+  }
+  updateUIState();
+}
+
 // Origin button: mutual exclusion with paint tools
 originBtn.addEventListener('click', () => {
-  if(simRunning) return; // should be disabled already
+  if(simRunning) return;
   drawTool='origin';
-  // Activate origin button; deactivate paint buttons
-  activateButtons(['originBtn'], 'originBtn');
+  originBtn.classList.add('active');
   paintButtons.forEach(b=>b.classList.remove('active'));
-  // Once origin chosen, update UI
+  updateUIState();
+});
+
+// Clear Origins button
+clearOriginsBtn.addEventListener('click', () => {
+  if(simRunning) return;
+  origins = [];
+  refreshOriginsList();
   updateUIState();
 });
 
 // Paint tool buttons: mutual exclusion with origin
 paintButtons.forEach(btnEl => {
   btnEl.addEventListener('click', () => {
-    if(simRunning) return; // should be disabled
+    if(simRunning) return;
     const id = btnEl.id; // e.g. 'penBtn'
     const tool = id.replace('Btn',''); // 'pen', etc.
     drawTool = tool;
-    // Activate only this paint button; deactivate others
     activateButtons(['penBtn','eraserBtn','rectBtn','sphereBtn','fillBtn'], id);
-    // Deactivate origin button
     originBtn.classList.remove('active');
     updateUIState();
   });
@@ -210,16 +284,17 @@ document.getElementById('shapeHollow2').addEventListener('change', e=>{
 
 // Start/Replay/Reload & Magnitude
 startBtn.addEventListener('click', () => {
-  if(originX!==null && !simRunning){
-    savedMag = +magInput.value;
-    resetFields(); inject(savedMag);
+  if(origins.length>0 && !simRunning){
+    resetFields();
+    injectAllOrigins();
     simRunning = true;
     updateUIState();
   }
 });
 replayBtn.addEventListener('click', () => {
-  if(originX!==null && simRunning){
-    resetFields(); inject(savedMag);
+  if(origins.length>0 && simRunning){
+    resetFields();
+    injectAllOrigins();
     updateUIState();
   }
 });
@@ -296,9 +371,17 @@ canvas.addEventListener('mousemove', e=>{
 canvas.addEventListener('mousedown', e=>{
   if(simRunning) return;
   const gm=toGrid(e); if(!gm)return;
-  if(drawTool==='origin'&& mediumGrid[gm.y][gm.x]!==1){
-    originX=gm.x; originY=gm.y;
-    updateUIState();
+  if(drawTool==='origin' && mediumGrid[gm.y][gm.x]!==1){
+    // Add new origin if not on border
+    const exists = origins.some(pt=> pt.x===gm.x && pt.y===gm.y);
+    if(!exists){
+      // Use global magnitude as default
+      let defaultMag = parseFloat(magInput.value);
+      if(isNaN(defaultMag) || defaultMag < 0) defaultMag = 0;
+      origins.push({x: gm.x, y: gm.y, mag: defaultMag});
+      refreshOriginsList();
+      updateUIState();
+    }
   } else {
     paintAt(gm.x,gm.y);
   }
@@ -409,15 +492,21 @@ function updatePhysics(dt){
     pDisp[y][x]+=pVel[y][x]; sDisp[y][x]+=sVel[y][x];
   }
 }
-function inject(mag){
+
+// inject from all origins with their own magnitudes
+function injectAllOrigins(){
   const r=3;
-  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
-    const ix=originX+dx, iy=originY+dy;
-    if(ix<0||iy<0||ix>=cols||iy>=rows) continue;
-    const d=Math.hypot(dx,dy), amp=mag*Math.exp(-d);
-    pDisp[iy][ix]+=amp; sDisp[iy][ix]+=amp*0.8;
-  }
+  origins.forEach(({x: ox, y: oy, mag}) => {
+    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      const ix=ox+dx, iy=oy+dy;
+      if(ix<0||iy<0||ix>=cols||iy>=rows) continue;
+      const d=Math.hypot(dx,dy), amp=mag*Math.exp(-d);
+      pDisp[iy][ix]+=amp;
+      sDisp[iy][ix]+=amp*0.8;
+    }
+  });
 }
+
 function clamp(v){return Math.max(0,Math.min(255,Math.round(v)));}
 
 function draw(){
@@ -436,11 +525,11 @@ function draw(){
     ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
   }
   ctx.globalAlpha=1;
-  // draw origin if set
-  if(originX!==null){
+  // draw origins if set
+  origins.forEach(({x, y}) => {
     ctx.fillStyle='lime';
-    ctx.fillRect(originX*cellW,originY*cellH,cellW,cellH);
-  }
+    ctx.fillRect(x*cellW, y*cellH, cellW, cellH);
+  });
   drawPreview();
 }
 

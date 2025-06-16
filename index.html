@@ -72,6 +72,44 @@
       background: #f0f0f0; cursor: not-allowed;
     }
 
+    /* Origins list styles */
+    #originsList {
+      max-height: 100px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      padding: 4px;
+      margin-top: 4px;
+    }
+    #originsList .origin-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 4px;
+      font-size: 13px;
+      border-bottom: 1px solid #ddd;
+    }
+    #originsList .origin-item:last-child {
+      border-bottom: none;
+    }
+    #originsList .remove-origin {
+      background: transparent;
+      border: none;
+      color: #900;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      line-height: 1;
+    }
+    #originsList .remove-origin:disabled {
+      color: #ccc;
+      cursor: not-allowed;
+    }
+    #originsList .origin-mag {
+      width: 60px;
+      margin-left: 8px;
+    }
+
     /* Top-right global controls */
     #globalControls {
       position:absolute; top:10px; right:10px; display:flex; gap:8px;
@@ -98,9 +136,19 @@
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
-      <button id="originBtn" class="active">Origin</button>
-      <label>Magnitude:
-        <input id="mag" type="number" min="5.0" max="6.6" step="0.1" value="5.0">
+      <!-- Add Origin button -->
+      <button id="originBtn" class="active">Add Origin</button>
+      <!-- Origins list -->
+      <label style="margin-top:4px; margin-bottom:2px;">Origins (click canvas to add):</label>
+      <div id="originsList">
+        <div style="font-size:13px; color:#666;">No origins yet</div>
+      </div>
+      <button id="clearOriginsBtn">Clear Origins</button>
+
+      <!-- Magnitude & control buttons -->
+      <label style="margin-top:8px;">Global Magnitude (default for new origins):
+        <!-- Removed max attribute; keep min=0 so only non-negative -->
+        <input id="mag" type="number" min="0" step="0.1" value="5.0">
       </label>
       <button id="startSim">Start</button>
       <button id="replay">Replay</button>
