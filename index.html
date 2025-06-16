@@ -2,74 +2,92 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Seismic Simulator</title>
+  <title>Seismic Simulator with Mediums</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: black;
-      overflow: hidden;
-    }
+    html, body { margin:0; padding:0; background:black; overflow:hidden; }
     #ui {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255,255,255,0.95);
-      padding: 10px;
-      font-family: sans-serif;
-      font-size: 14px;
-      z-index: 10;
-      max-width: 300px;
+      position:absolute; top:10px; left:10px;
+      background:rgba(255,255,255,0.95); padding:10px;
+      font-family:sans-serif; font-size:14px; z-index:10; max-width:400px;
     }
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-      background: black;
+    #tools, #mediumControls { margin-bottom:8px; }
+    .tool-btn {
+      padding:4px 8px; margin:2px; border:1px solid #888;
+      background:#eee; cursor:pointer;
     }
-    #toolLabel { font-weight: bold; }
-    #startSim, #reload, #replay { display: none; margin-top: 10px; }
-    .legend {
-      margin-top: 10px;
-      font-size: 12px;
-      line-height: 1.4em;
+    .tool-btn.active {
+      background:#4285f4; color:white; border-color:#2a56c6;
     }
+    .control-group { margin-top:8px; }
+    .control-group label { margin-right:8px; }
+    canvas { display:block; width:100vw; height:100vh; background:black; }
+    #startSim, #reload, #replay { display:none; margin-top:10px; }
+    .legend { margin-top:10px; font-size:12px; line-height:1.4em; }
     .legend div::before {
-      content: '⬤ ';
-      font-size: 14px;
-      display: inline-block;
-      width: 1.2em;
+      content:'⬤ '; display:inline-block; width:1.2em; font-size:14px;
     }
-    .red::before { color: red; }
-    .green::before { color: green; }
-    .cyan::before { color: cyan; }
-    .magenta::before { color: magenta; }
-    .gray::before { color: gray; }
-    .blue::before { color: blue; }
-    .lime::before { color: lime; }
   </style>
 </head>
 <body>
   <div id="ui">
-    <button id="tool">Toggle Tool</button>
-    <span>Current Tool: <span id="toolLabel">Pen</span></span><br>
-    <label>Magnitude: <input id="mag" type="number" min="5.0" max="6.6" step="0.1" value="5.0"></label><br>
-    <p>Click to place epicenter, then press Start</p>
+
+    <!-- Medium Picker -->
+    <div id="mediumControls">
+      <label>Base Medium:
+        <select id="baseMediumSelect"></select>
+      </label>
+      <button id="fillBase">Fill Canvas</button>
+      <label style="margin-left:12px">
+        Paint Medium:
+        <select id="paintMediumSelect"></select>
+      </label>
+    </div>
+
+    <!-- Tools -->
+    <div id="tools">
+      <button id="penTool"    class="tool-btn active">Pen</button>
+      <button id="eraserTool" class="tool-btn">Eraser</button>
+      <button id="rectTool"   class="tool-btn">Rectangle</button>
+      <button id="sphereTool" class="tool-btn">Sphere</button>
+      <button id="fillTool"   class="tool-btn">Fill</button>
+      <button id="originTool" class="tool-btn">Origin</button>
+    </div>
+
+    <div>Current Tool: <strong id="toolLabel">Pen</strong></div>
+
+    <div class="control-group" id="penWidthContainer">
+      <label>Pen Width:
+        <span id="penWidthLabel">1</span>
+      </label>
+      <input id="penWidth" type="range" min="1" max="10" value="1">
+    </div>
+    <div class="control-group" id="eraserSizeContainer">
+      <label>Eraser Size:
+        <span id="eraserSizeLabel">1</span>
+      </label>
+      <input id="eraserSize" type="range" min="1" max="20" value="1">
+    </div>
+    <div class="control-group" id="shapeOptions">
+      <label>
+        <input type="checkbox" id="shapeHollow">
+        Hollow Shapes
+      </label>
+    </div>
+
+    <div class="control-group">
+      <label>Magnitude:
+        <input id="mag" type="number" min="5.0" max="6.6" step="0.1" value="5.0">
+      </label>
+    </div>
+
+    <p>Click “Origin” then click a cell to place epicenter.</p>
     <button id="startSim">Start Simulation</button>
     <button id="replay">Replay Simulation</button>
     <button id="reload">Reload Simulation</button>
 
-    <div class="legend">
-      <strong>Legend</strong>
-      <div class="red">P-wave (+)</div>
-      <div class="cyan">P-wave (−)</div>
-      <div class="green">S-wave (+)</div>
-      <div class="magenta">S-wave (−)</div>
-      <div class="gray">Neutral zone</div>
-      <div class="blue">Reflective border</div>
-      <div class="lime">Epicenter</div>
-    </div>
+    <div class="legend" id="legend"></div>
   </div>
+
   <canvas id="canvas"></canvas>
   <script src="index.js"></script>
 </body>
