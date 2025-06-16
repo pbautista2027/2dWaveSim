@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Seismic Simulator - Final Version</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      overflow: hidden;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 10px;
+      font-family: sans-serif;
+      font-size: 14px;
+      z-index: 10;
+      max-width: 300px;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: black;
+    }
+    #toolLabel { font-weight: bold; }
+    #startSim, #reload, #replay { display: none; margin-top: 10px; }
+    .legend {
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 1.4em;
+    }
+    .legend div::before {
+      content: '⬤ ';
+      font-size: 14px;
+      display: inline-block;
+      width: 1.2em;
+    }
+    .red::before { color: red; }
+    .green::before { color: green; }
+    .cyan::before { color: cyan; }
+    .magenta::before { color: magenta; }
+    .gray::before { color: gray; }
+    .blue::before { color: blue; }
+    .lime::before { color: lime; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="tool">Toggle Tool</button>
+    <span>Current Tool: <span id="toolLabel">Pen</span></span><br>
+    <label>Magnitude: <input id="mag" type="number" min="5.0" max="6.6" step="0.1" value="5.0"></label><br>
+    <p>Click to place epicenter, then press Start</p>
+    <button id="startSim">Start Simulation</button>
+    <button id="replay">Replay Simulation</button>
+    <button id="reload">Reload Simulation</button>
+
+    <div class="legend">
+      <strong>Legend</strong>
+      <div class="red">P-wave (+)</div>
+      <div class="cyan">P-wave (−)</div>
+      <div class="green">S-wave (+)</div>
+      <div class="magenta">S-wave (−)</div>
+      <div class="gray">Neutral zone</div>
+      <div class="blue">Reflective border</div>
+      <div class="lime">Epicenter</div>
+    </div>
+  </div>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const cols = 100, rows = 100;
+    const kmPerCell = 0.5;
+    const dt = 0.01;
+    const Vp = 6.0, Vs = 3.5;
+
+    let cellW, cellH;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cellW = canvas.width / cols;
+    cellH = canvas.height / rows;
+
+    let simRunning = false;
+    let drawTool = 'pen';
+    let isDrawing = false;
+    let originX = null, originY = null;
+    let storedMag = 5.0;
+
+    const fieldV = [], fieldH = [], velV = [], velH = [], borders = [];
+    for (let y = 0; y < rows; y++) {
+      fieldV[y] = new Float32Array(cols);
+      fieldH[y] = new Float32Array(cols);
+      velV[y] = new Float32Array(cols);
+      velH[y] = new Float32Array(cols);
+      borders[y] = new Uint8Array(cols);
+    }
+
+    function resetFields() {
+      for (let y = 0; y < rows; y++) {
+        fieldV[y].fill(0);
+        fieldH[y].fill(0);
+        velV[y].fill(0);
+        velH[y].fill(0);
+      }
+    }
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cellW = canvas.width / cols;
+      cellH = canvas.height / rows;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      for (let x = 0; x <= cols; x++) {
+        ctx.beginPath(); ctx.moveTo(x * cellW, 0); ctx.lineTo(x * cellW, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y <= rows; y++) {
+        ctx.beginPath(); ctx.moveTo(0, y * cellH); ctx.lineTo(canvas.width, y * cellH); ctx.stroke();
+      }
+    }
+
+    function drawWaves() {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (borders[y][x]) continue;
+
+          const p = fieldV[y][x];
+          const s = fieldH[y][x];
+
+          const r = Math.max(0, Math.min(255, 128 + 127 * (p - s)));
+          const g = Math.max(0, Math.min(255, 128 + 127 * (s - p)));
+          const b = Math.max(0, Math.min(255, 128 - 127 * (p + s)));
+
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
+        }
+      }
+
+      if (originX !== null && originY !== null) {
+        ctx.fillStyle = 'lime';
+        ctx.fillRect(originX * cellW, originY * cellH, cellW, cellH);
+      }
+    }
+
+    function drawBorders() {
+      ctx.fillStyle = "#00f";
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (borders[y][x]) ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
+        }
+      }
+    }
+
+    function update() {
+      if (!simRunning) return;
+      const scaleVp = (Vp * dt / kmPerCell) ** 2;
+      const scaleVs = (Vs * dt / kmPerCell) ** 2;
+
+      for (let y = 1; y < rows - 1; y++) {
+        for (let x = 1; x < cols - 1; x++) {
+          if (borders[y][x]) continue;
+          const lapV = fieldV[y][x+1] + fieldV[y][x-1] + fieldV[y+1][x] + fieldV[y-1][x] - 4 * fieldV[y][x];
+          const lapH = fieldH[y][x+1] + fieldH[y][x-1] + fieldH[y+1][x] + fieldH[y-1][x] - 4 * fieldH[y][x];
+          velV[y][x] += scaleVp * lapV;
+          velH[y][x] += scaleVs * lapH;
+          velV[y][x] *= 0.99;
+          velH[y][x] *= 0.99;
+        }
+      }
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (borders[y][x]) {
+            velV[y][x] *= -0.5;
+            velH[y][x] *= -0.5;
+          }
+          fieldV[y][x] += velV[y][x];
+          fieldH[y][x] += velH[y][x];
+        }
+      }
+    }
+
+    function animate() {
+      update();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      drawWaves();
+      drawBorders();
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    canvas.addEventListener("mousedown", e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / cellW);
+      const y = Math.floor((e.clientY - rect.top) / cellH);
+      if (simRunning) return;
+      if (drawTool === 'pen' || drawTool === 'eraser') {
+        paint(x, y); isDrawing = true;
+      } else if (drawTool === 'origin') {
+        originX = x; originY = y;
+        document.getElementById("startSim").style.display = 'inline-block';
+      }
+    });
+
+    canvas.addEventListener("mousemove", e => {
+      if (!isDrawing || simRunning) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / cellW);
+      const y = Math.floor((e.clientY - rect.top) / cellH);
+      paint(x, y);
+    });
+
+    window.addEventListener("mouseup", () => { isDrawing = false; });
+
+    function paint(x, y) {
+      if (x >= 0 && x < cols && y >= 0 && y < rows) {
+        if (drawTool === 'pen') borders[y][x] = 1;
+        else if (drawTool === 'eraser') {
+          borders[y][x] = 0;
+          if (x === originX && y === originY) {
+            originX = null;
+            originY = null;
+            document.getElementById("startSim").style.display = 'none';
+          }
+        }
+      }
+    }
+
+    document.getElementById("tool").onclick = () => {
+      if (simRunning) return;
+      if (drawTool === 'pen') drawTool = 'eraser';
+      else if (drawTool === 'eraser') drawTool = 'origin';
+      else drawTool = 'pen';
+      document.getElementById("toolLabel").innerText = drawTool.charAt(0).toUpperCase() + drawTool.slice(1);
+    };
+
+    function injectEarthquake(mag) {
+      const r = 3;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const ix = originX + dx;
+          const iy = originY + dy;
+          if (ix >= 0 && ix < cols && iy >= 0 && iy < rows) {
+            const d = Math.hypot(dx, dy);
+            const amp = mag * Math.exp(-d);
+            fieldV[iy][ix] += amp;
+            fieldH[iy][ix] += amp * 0.8;
+          }
+        }
+      }
+    }
+
+    document.getElementById("startSim").onclick = () => {
+      if (originX !== null && originY !== null && !simRunning) {
+        storedMag = parseFloat(document.getElementById("mag").value);
+        resetFields();
+        injectEarthquake(storedMag);
+        simRunning = true;
+        document.getElementById("startSim").style.display = 'none';
+        document.getElementById("reload").style.display = 'inline-block';
+        document.getElementById("replay").style.display = 'inline-block';
+      }
+    };
+
+    document.getElementById("replay").onclick = () => {
+      if (originX !== null && originY !== null) {
+        resetFields();
+        injectEarthquake(storedMag);
+        simRunning = true;
+      }
+    };
+
+    document.getElementById("reload").onclick = () => location.reload();
+  </script>
+</body>
+</html>
