@@ -32,9 +32,9 @@ document.getElementById('resetAll').onclick = () => {
 // ===== Window dragging =====
 dropdowns.forEach(win => {
   const handle = win.querySelector('.drag-handle');
-  let isDragging = false;
-  let startX = 0, startY = 0;
-  let origLeft = 0, origTop = 0;
+  var isDragging = false;
+  var startX = 0, startY = 0;
+  var origLeft = 0, origTop = 0;
 
   handle.addEventListener('mousedown', e => {
     isDragging = true;
@@ -65,7 +65,7 @@ dropdowns.forEach(win => {
 
 // ===== Canvas & Simulation Setup =====
 const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
-let cols=100, rows=100, cellW, cellH;
+var cols=100, rows=100, cellW, cellH;
 function resize(){ 
   canvas.width=innerWidth; 
   canvas.height=innerHeight; 
@@ -102,14 +102,14 @@ mediums.forEach(m=>{
 
 // — Wave fields —
 const pDisp=[], sDisp=[], pVel=[], sVel=[];
-for(let y=0;y<rows;y++){
+for(var y=0;y<rows;y++){
   pDisp[y]=new Float32Array(cols);
   sDisp[y]=new Float32Array(cols);
   pVel[y]=new Float32Array(cols);
   sVel[y]=new Float32Array(cols);
 }
 function resetFields(){
-  for(let y=0;y<rows;y++){
+  for(var y=0;y<rows;y++){
     pDisp[y].fill(0); sDisp[y].fill(0);
     pVel[y].fill(0); sVel[y].fill(0);
   }
@@ -117,10 +117,10 @@ function resetFields(){
 
 // — State & UI Bindings —
 // drawTool can be 'origin' (for adding origins) or paint tools
-let drawTool='origin', penW=1, eraserW=1, hollow=false;
-let origins = []; // Array of {x, y, mag}
-let simRunning=false;
-let lastMouse={x:0,y:0}, preview=null, shapeStart=null;
+var drawTool='origin', penW=1, eraserW=1, hollow=false;
+var origins = []; // Array of {x, y, mag}
+var simRunning=false;
+var lastMouse={x:0,y:0}, preview=null, shapeStart=null;
 
 const originBtn = document.getElementById('originBtn');
 const startBtn = document.getElementById('startSim');
@@ -211,7 +211,7 @@ function refreshOriginsList(){
       magInp.className = 'origin-mag';
       magInp.title = 'Magnitude for this origin';
       magInp.addEventListener('input', () => {
-        let v = parseFloat(magInp.value);
+        var v = parseFloat(magInp.value);
         if (isNaN(v) || v < 0) v = 0;
         pt.mag = v;
         magInp.value = v.toFixed(1);
@@ -305,7 +305,7 @@ reloadBtn.addEventListener('click', () => {
 });
 
 // Terrain Gen parameters
-let noiseScale=0.1, waterTh=0.3, sandTh=0.4, rockTh=0.7;
+var noiseScale=0.1, waterTh=0.3, sandTh=0.4, rockTh=0.7;
 [
   ['noiseScale','noiseScaleLabel','noiseScale'],
   ['waterThresh','waterThreshLabel','waterTh'],
@@ -330,15 +330,15 @@ function noise(x, y) {
 
 document.getElementById('generateTerrain').onclick = () => {
   if(simRunning) return; // disabled by UI
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
+  for(var y=0;y<rows;y++){
+    for(var x=0;x<cols;x++){
       if (x===0||y===0||x===cols-1||y===rows-1) {
         mediumGrid[y][x] = 1; // border
       } else {
         const nx = x * noiseScale;
         const ny = y * noiseScale;
         const v = noise(nx, ny);
-        let m;
+        var m;
         if (v < waterTh) {
           m = 2; // Water
         } else if (v < sandTh) {
@@ -376,7 +376,7 @@ canvas.addEventListener('mousedown', e=>{
     const exists = origins.some(pt=> pt.x===gm.x && pt.y===gm.y);
     if(!exists){
       // Use global magnitude as default
-      let defaultMag = parseFloat(magInput.value);
+      var defaultMag = parseFloat(magInput.value);
       if(isNaN(defaultMag) || defaultMag < 0) defaultMag = 0;
       origins.push({x: gm.x, y: gm.y, mag: defaultMag});
       refreshOriginsList();
@@ -405,13 +405,13 @@ function paintAt(cx,cy){
   if(simRunning) return;
   const mid=+paintSelect.value;
   if(drawTool==='pen'){
-    for(let dy=-penW;dy<=penW;dy++)for(let dx=-penW;dx<=penW;dx++){
+    for(var dy=-penW;dy<=penW;dy++)for(var dx=-penW;dx<=penW;dx++){
       const nx=cx+dx, ny=cy+dy;
       if(nx>=0&&ny>=0&&nx<cols&&ny<rows) mediumGrid[ny][nx]=mid;
     }
   }
   if(drawTool==='eraser'){
-    for(let dy=-eraserW;dy<=eraserW;dy++)for(let dx=-eraserW;dx<=eraserW;dx++){
+    for(var dy=-eraserW;dy<=eraserW;dy++)for(var dx=-eraserW;dx<=eraserW;dx++){
       const nx=cx+dx, ny=cy+dy;
       if(nx>=0&&ny>=0&&nx<cols&&ny<rows) mediumGrid[ny][nx]=0;
     }
@@ -437,37 +437,37 @@ function finalizeShape({tool,x0,y0,x1,y1}){
   const ymin=Math.min(y0,y1), ymax=Math.max(y0,y1);
   if(tool==='rect'){
     if(hollow){
-      for(let x=xmin;x<=xmax;x++){ mediumGrid[ymin][x]=mid; mediumGrid[ymax][x]=mid; }
-      for(let y=ymin;y<=ymax;y++){ mediumGrid[y][xmin]=mid; mediumGrid[y][xmax]=mid; }
+      for(var x=xmin;x<=xmax;x++){ mediumGrid[ymin][x]=mid; mediumGrid[ymax][x]=mid; }
+      for(var y=ymin;y<=ymax;y++){ mediumGrid[y][xmin]=mid; mediumGrid[y][xmax]=mid; }
     } else {
-      for(let y=ymin;y<=ymax;y++)for(let x=xmin;x<=xmax;x++) mediumGrid[y][x]=mid;
+      for(var y=ymin;y<=ymax;y++)for(var x=xmin;x<=xmax;x++) mediumGrid[y][x]=mid;
     }
   } else {
     const rx=Math.abs(x1-x0), ry=Math.abs(y1-y0);
     if(rx===0 || ry===0) {
       if(hollow) {
         if(rx===0) {
-          for(let y=ymin;y<=ymax;y++) mediumGrid[y][x0]=mid;
+          for(var y=ymin;y<=ymax;y++) mediumGrid[y][x0]=mid;
         } else {
-          for(let x=xmin;x<=xmax;x++) mediumGrid[y0][x]=mid;
+          for(var x=xmin;x<=xmax;x++) mediumGrid[y0][x]=mid;
         }
       } else {
         if(rx===0) {
-          for(let y=ymin;y<=ymax;y++) mediumGrid[y][x0]=mid;
+          for(var y=ymin;y<=ymax;y++) mediumGrid[y][x0]=mid;
         } else {
-          for(let x=xmin;x<=xmax;x++) mediumGrid[y0][x]=mid;
+          for(var x=xmin;x<=xmax;x++) mediumGrid[y0][x]=mid;
         }
       }
     } else {
       if(hollow){
-        for(let i=0;i<360;i++){
+        for(var i=0;i<360;i++){
           const θ=i/360*2*Math.PI;
           const ix=Math.round(x0+Math.cos(θ)*rx),
                 iy=Math.round(y0+Math.sin(θ)*ry);
           if(ix>=0&&iy>=0&&ix<cols&&iy<rows) mediumGrid[iy][ix]=mid;
         }
       } else {
-        for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+        for(var y=0;y<rows;y++)for(var x=0;x<cols;x++){
           if(((x-x0)/rx)**2+((y-y0)/ry)**2<=1) mediumGrid[y][x]=mid;
         }
       }
@@ -479,14 +479,14 @@ function finalizeShape({tool,x0,y0,x1,y1}){
 const km=0.5, dtFixed=0.01, pSpeed=6, sSpeed=3.5;
 function updatePhysics(dt){
   const vp=(pSpeed*dt/km)**2, vs=(sSpeed*dt/km)**2;
-  for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+  for(var y=1;y<rows-1;y++)for(var x=1;x<cols-1;x++){
     const lapP=pDisp[y][x+1]+pDisp[y][x-1]+pDisp[y+1][x]+pDisp[y-1][x]-4*pDisp[y][x];
     const lapS=sDisp[y][x+1]+sDisp[y][x-1]+sDisp[y+1][x]+sDisp[y-1][x]-4*sDisp[y][x];
     const m=mediums[ mediumGrid[y][x] ];
     pVel[y][x]+=vp*lapP*m.speed; sVel[y][x]+=vs*lapS*m.speed;
     pVel[y][x]*=m.damping; sVel[y][x]*=m.damping;
   }
-  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+  for(var y=0;y<rows;y++)for(var x=0;x<cols;x++){
     const m=mediums[ mediumGrid[y][x] ];
     if(!m.propagate()){ pVel[y][x]*=-0.5; sVel[y][x]*=-0.5; }
     pDisp[y][x]+=pVel[y][x]; sDisp[y][x]+=sVel[y][x];
@@ -497,7 +497,7 @@ function updatePhysics(dt){
 function injectAllOrigins(){
   const r=3;
   origins.forEach(({x: ox, y: oy, mag}) => {
-    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+    for(var dy=-r;dy<=r;dy++)for(var dx=-r;dx<=r;dx++){
       const ix=ox+dx, iy=oy+dy;
       if(ix<0||iy<0||ix>=cols||iy>=rows) continue;
       const d=Math.hypot(dx,dy), amp=mag*Math.exp(-d);
@@ -511,13 +511,13 @@ function clamp(v){return Math.max(0,Math.min(255,Math.round(v)));}
 
 function draw(){
   // draw medium background
-  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+  for(var y=0;y<rows;y++)for(var x=0;x<cols;x++){
     ctx.fillStyle=mediums[ mediumGrid[y][x] ].color;
     ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
   }
   // overlay waves
   ctx.globalAlpha=0.6;
-  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+  for(var y=0;y<rows;y++)for(var x=0;x<cols;x++){
     if(mediums[ mediumGrid[y][x] ].reflect) continue;
     const p=pDisp[y][x], s=sDisp[y][x];
     const r=clamp(128+127*(p-s)), g=clamp(128+127*(s-p)), b=clamp(128-127*(p+s));
@@ -559,7 +559,7 @@ function drawPreview(){
 }
 
 // Animation loop
-let lastTs=0, acc=0;
+var lastTs=0, acc=0;
 function loop(ts){
   if(!lastTs) lastTs=ts;
   const dt=(ts-lastTs)/1000; lastTs=ts;
