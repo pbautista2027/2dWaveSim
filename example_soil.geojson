@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "soil_type": "Water" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.95, 14.45],
+            [121.05, 14.45],
+            [121.05, 14.50],
+            [120.95, 14.50],
+            [120.95, 14.45]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "soil_type": "Marine Clay" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.90, 14.40],
+            [121.10, 14.40],
+            [121.10, 14.45],
+            [120.90, 14.45],
+            [120.90, 14.40]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "soil_type": "Alluvial Soil" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.90, 14.45],
+            [121.10, 14.45],
+            [121.10, 14.60],
+            [120.90, 14.60],
+            [120.90, 14.45]
+          ]
+        ]
+      }
+    }
+  ]
+}
