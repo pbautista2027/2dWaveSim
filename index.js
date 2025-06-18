@@ -6,7 +6,6 @@ const dropdowns = [
   document.getElementById('paintDropdown'),
   document.getElementById('terrainDropdown')
 ];
-
 document.getElementById('toggleAll').onclick = () => {
   const anyOpen = dropdowns.some(d => d.open);
   dropdowns.forEach(d => d.open = !anyOpen);
@@ -18,7 +17,6 @@ const windowDefaults = {
   paintDropdown: { left: 310, top: 10 },
   terrainDropdown: { left: 630, top: 10 }
 };
-
 document.getElementById('resetAll').onclick = () => {
   dropdowns.forEach(d => {
     const def = windowDefaults[d.id];
@@ -67,7 +65,6 @@ dropdowns.forEach(win => {
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let cols = 100, rows = 100, cellW, cellH;
-
 function resizeCanvas() {
   canvas.width = innerWidth;
   canvas.height = innerHeight;
@@ -113,7 +110,6 @@ const mediums = [
   new Medium(8, 'Novaliches Loam', '#b56576', 1.8, 0.994, false),
   new Medium(9, 'San Luis Clay', '#d2b48c', 1.0, 0.99, false)
 ];
-
 // Initialize mediumGrid default to Soft Soil (ID 0)
 const mediumGrid = Array.from({ length: rows }, () => {
   const arr = new Uint8Array(cols);
@@ -173,6 +169,7 @@ const redoStack = [];
 const originBtn = document.getElementById('originBtn');
 const startBtn = document.getElementById('startSim');
 const replayBtn = document.getElementById('replay');
+const finishBtn = document.getElementById('finishSim');
 const reloadBtn = document.getElementById('reload');
 const magInput = document.getElementById('mag');
 
@@ -193,6 +190,9 @@ const syntheticControls = document.getElementById('syntheticControls');
 const noiseControls     = document.getElementById('noiseControls');
 const geojsonControls   = document.getElementById('geojsonControls');
 const applyTerrainBtn   = document.getElementById('applyTerrain');
+const saveTerrainBtn    = document.getElementById('saveTerrain');
+const loadTerrainFile   = document.getElementById('loadTerrainFile');
+const loadTerrainBtn    = document.getElementById('loadTerrain');
 const geojsonTutorialBtn = document.getElementById('geojsonTutorialBtn');
 
 // Synthetic inputs
@@ -252,42 +252,11 @@ function updateUndoRedoButtons() {
   redoBtn.disabled = simRunning || redoStack.length === 0;
 }
 
-// Undo action
-undoBtn.addEventListener('click', () => {
-  if (simRunning) return;
-  if (undoStack.length === 0) return;
-  const gridCopy = mediumGrid.map(row => row.slice());
-  const originsCopy = origins.map(pt => ({ x: pt.x, y: pt.y, mag: pt.mag }));
-  redoStack.push({ grid: gridCopy, origins: originsCopy });
-  const prev = undoStack.pop();
-  for (let y = 0; y < rows; y++) {
-    mediumGrid[y].set(prev.grid[y]);
-  }
-  origins = prev.origins.map(pt => ({ x: pt.x, y: pt.y, mag: pt.mag }));
-  refreshOriginsList();
-  updateUndoRedoButtons();
-});
-
-// Redo action
-redoBtn.addEventListener('click', () => {
-  if (simRunning) return;
-  if (redoStack.length === 0) return;
-  const gridCopy = mediumGrid.map(row => row.slice());
-  const originsCopy = origins.map(pt => ({ x: pt.x, y: pt.y, mag: pt.mag }));
-  undoStack.push({ grid: gridCopy, origins: originsCopy });
-  const next = redoStack.pop();
-  for (let y = 0; y < rows; y++) {
-    mediumGrid[y].set(next.grid[y]);
-  }
-  origins = next.origins.map(pt => ({ x: pt.x, y: pt.y, mag: pt.mag }));
-  refreshOriginsList();
-  updateUndoRedoButtons();
-});
-
 // Update UI enabled/disabled based on state
 function updateUIState() {
   startBtn.disabled = simRunning || origins.length === 0;
   replayBtn.disabled = !simRunning;
+  finishBtn.disabled = !simRunning;
   reloadBtn.disabled = !simRunning;
   originBtn.disabled = simRunning;
   paintButtons.forEach(b => b.disabled = simRunning);
@@ -296,6 +265,7 @@ function updateUIState() {
   document.getElementById('shapeHollow2').disabled = simRunning;
   paintSelect.disabled = simRunning;
   magInput.disabled = simRunning;
+
   // Disable terrain UI while running
   terrainModeSel.disabled = simRunning;
   synFracWater.disabled    = simRunning;
@@ -314,8 +284,13 @@ function updateUIState() {
   soilMappingJsonInp.disabled = simRunning;
   applyGeojsonBtn.disabled = simRunning;
   applyTerrainBtn.disabled = simRunning;
+  saveTerrainBtn.disabled = simRunning;
+  loadTerrainFile.disabled = simRunning;
+  loadTerrainBtn.disabled = simRunning;
+
   // GeoJSON Tutorial button: enabled when visible and not running
   geojsonTutorialBtn.disabled = simRunning;
+
   // Undo/Redo
   updateUndoRedoButtons();
   // Origins list: disable remove buttons & per-origin mags if running
@@ -426,7 +401,7 @@ document.getElementById('shapeHollow2').addEventListener('change', e => {
   hollow = e.target.checked;
 });
 
-// Start/Replay/Reload
+// Start/Replay/Finish/Reload
 startBtn.addEventListener('click', () => {
   if (origins.length > 0 && !simRunning) {
     resetFields();
@@ -439,6 +414,13 @@ replayBtn.addEventListener('click', () => {
   if (origins.length > 0 && simRunning) {
     resetFields();
     injectAllOrigins();
+    updateUIState();
+  }
+});
+finishBtn.addEventListener('click', () => {
+  if (simRunning) {
+    simRunning = false;
+    resetFields();
     updateUIState();
   }
 });
@@ -468,7 +450,6 @@ terrainModeSel.addEventListener('change', () => {
   syntheticControls.style.display = (mode === 'synthetic' ? 'block' : 'none');
   noiseControls.style.display     = (mode === 'noise' ? 'block' : 'none');
   geojsonControls.style.display   = (mode === 'geojson' ? 'block' : 'none');
-  // Show/hide tutorial button
   geojsonTutorialBtn.style.display = (mode === 'geojson') ? 'block' : 'none';
   updateUIState();
 });
@@ -486,12 +467,9 @@ updateUIState();
 geojsonTutorialBtn.addEventListener('click', () => {
   showModal();
 });
-
 // Modal close buttons
 modalCloseBtn.addEventListener('click', hideModal);
 modalCloseBtnFooter.addEventListener('click', hideModal);
-
-// Functions to show/hide modal
 function showModal() {
   modalOverlay.classList.add('show');
 }
@@ -701,6 +679,66 @@ applyTerrainBtn.addEventListener('click', () => {
   }
 });
 
+// Save Terrain: serialize mediumGrid → JSON file
+saveTerrainBtn.addEventListener('click', () => {
+  if (simRunning) return; // disabled via UIState anyway
+  const data = {
+    rows: rows,
+    cols: cols,
+    grid: mediumGrid.map(row => Array.from(row))
+  };
+  const jsonStr = JSON.stringify(data);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'terrain.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+// Load Terrain: read JSON file, validate dimensions, apply to mediumGrid
+loadTerrainBtn.addEventListener('click', () => {
+  if (simRunning) return; // disabled via UIState
+  const file = loadTerrainFile.files[0];
+  if (!file) {
+    alert('Select a terrain file first');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const obj = JSON.parse(e.target.result);
+      if (obj.rows !== rows || obj.cols !== cols) {
+        alert(`Terrain dimensions mismatch: expected ${rows}x${cols}, got ${obj.rows}x${obj.cols}`);
+        return;
+      }
+      if (!Array.isArray(obj.grid) || obj.grid.length !== rows) {
+        alert('Invalid terrain format');
+        return;
+      }
+      // Save state for undo
+      pushStateForUndo();
+      for (let y = 0; y < rows; y++) {
+        const row = obj.grid[y];
+        if (!Array.isArray(row) || row.length !== cols) {
+          alert('Invalid terrain row format');
+          return;
+        }
+        mediumGrid[y].set(row);
+      }
+      // After loading terrain, clear any origins? Or keep? We keep origins unchanged.
+      refreshOriginsList();
+      updateUIState();
+    } catch (err) {
+      alert('Error parsing terrain file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
 // ===== Mouse & Painting/Origin =====
 canvas.addEventListener('mousemove', e => {
   const gm = toGrid(e);
@@ -864,8 +902,10 @@ function updatePhysics(dt) {
   const vp = (pSpeed * dt / km) ** 2, vs = (sSpeed * dt / km) ** 2;
   for (let y = 1; y < rows - 1; y++) {
     for (let x = 1; x < cols - 1; x++) {
-      const lapP = pDisp[y][x+1] + pDisp[y][x-1] + pDisp[y+1][x] + pDisp[y-1][x] - 4 * pDisp[y][x];
-      const lapS = sDisp[y][x+1] + sDisp[y][x-1] + sDisp[y+1][x] + sDisp[y-1][x] - 4 * sDisp[y][x];
+      const lapP = pDisp[y][x+1] + pDisp[y][x-1] + pDisp[y+1][x] + pDisp[y-1][x]
+                 - 4 * pDisp[y][x];
+      const lapS = sDisp[y][x+1] + sDisp[y][x-1] + sDisp[y+1][x] + sDisp[y-1][x]
+                 - 4 * sDisp[y][x];
       const m = mediums[ mediumGrid[y][x] ];
       pVel[y][x] += vp * lapP * m.speed;
       sVel[y][x] += vs * lapS * m.speed;
@@ -939,13 +979,16 @@ function drawPreview() {
   ctx.lineWidth = 2;
   if (drawTool === 'pen') {
     const w = penW;
-    ctx.strokeRect((lastMouse.x - w) * cellW, (lastMouse.y - w) * cellH, (2*w+1) * cellW, (2*w+1) * cellH);
+    ctx.strokeRect((lastMouse.x - w) * cellW, (lastMouse.y - w) * cellH,
+                   (2*w+1) * cellW, (2*w+1) * cellH);
   } else if (drawTool === 'eraser') {
     const r = eraserW;
-    ctx.strokeRect((lastMouse.x - r) * cellW, (lastMouse.y - r) * cellH, (2*r+1) * cellW, (2*r+1) * cellH);
+    ctx.strokeRect((lastMouse.x - r) * cellW, (lastMouse.y - r) * cellH,
+                   (2*r+1) * cellW, (2*r+1) * cellH);
   } else if (drawTool === 'origin') {
     if (lastMouse) {
-      ctx.strokeRect(lastMouse.x * cellW, lastMouse.y * cellH, cellW, cellH);
+      ctx.strokeRect(lastMouse.x * cellW, lastMouse.y * cellH,
+                     cellW, cellH);
     }
   } else if (preview) {
     const { tool, x0, y0, x1, y1 } = preview;
@@ -980,5 +1023,5 @@ function loop(ts) {
 }
 requestAnimationFrame(loop);
 
-// ===== Terrain generation functions =====
-// (applySyntheticTerrain, applyNoiseTerrain, applyGeojsonTerrain defined above)
+// ===== Terrain generation helper functions =====
+// applySyntheticTerrain, applyNoiseTerrain, applyGeojsonTerrain already declared above.
