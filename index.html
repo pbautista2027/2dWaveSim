@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Seismic Simulator</title>
+  <title>Seismic Simulator with Icon & Text Toggle</title>
+  <!-- Google Fonts for Text tool -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto&family=Open+Sans&display=swap" rel="stylesheet">
   <style>
     html, body {
       margin:0; padding:0;
@@ -24,7 +28,7 @@
       background: #fafafa;
       border: 1px solid #888;
       border-radius: 4px;
-      width: 280px;
+      width: 240px;
       max-height: 90vh;
       overflow: auto;
       z-index: 20;
@@ -54,6 +58,7 @@
     .window button {
       display:block; width:100%; margin:6px 0; padding:6px;
       border:1px solid #888; background:#eee; cursor:pointer; font-size:14px;
+      box-sizing: border-box;
     }
     .window button.active {
       background:#4285f4; color:white; border-color:#2a56c6;
@@ -64,13 +69,11 @@
     .window label {
       display:block; margin:6px 0; font-size:14px;
     }
-    .window input[type="range"], .window input[type="number"], .window select, .window textarea {
+    .window input[type="range"], .window input[type="number"], .window select {
       width:100%; margin:4px 0; box-sizing:border-box; padding:4px;
-      font-size:14px;
     }
     .window input:disabled,
-    .window select:disabled,
-    .window textarea:disabled {
+    .window select:disabled {
       background: #f0f0f0; cursor: not-allowed;
     }
 
@@ -105,7 +108,7 @@
     }
     #originsList .remove-origin:disabled {
       color: #ccc;
-      cursor:not-allowed;
+      cursor: not-allowed;
     }
     #originsList .origin-mag {
       width: 60px;
@@ -120,81 +123,160 @@
     #globalControls button {
       padding:6px 12px; font-size:14px; cursor:pointer;
     }
-
-    /* Modal overlay for tutorial */
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.4);
-      backdrop-filter: blur(4px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease;
-      z-index: 10000;
-    }
-    .modal-overlay.show {
-      opacity: 1;
-      visibility: visible;
-    }
-    /* Modal content styled like .window but centered */
-    .modal-content {
-      background: #fafafa;
-      border: 1px solid #888;
-      border-radius: 4px;
-      width: 400px;
-      max-width: 90vw;
-      max-height: 80vh;
-      overflow: auto;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-      transform: translateY(-20px);
-      opacity: 0;
-      transition: transform 0.3s ease, opacity 0.3s ease;
-    }
-    .modal-overlay.show .modal-content {
-      transform: translateY(0);
-      opacity: 1;
-    }
-    .modal-content header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #444;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 4px 4px 0 0;
-      font-size: 16px;
-    }
-    .modal-content .modal-body {
-      padding: 12px;
-      color: #111;
-    }
-    .modal-content .modal-body p {
-      margin: 8px 0;
-      font-size: 14px;
-    }
-    .modal-content .modal-body code {
-      background: #eee;
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-family: monospace;
-      font-size: 13px;
-    }
-    .modal-content footer {
-      padding: 8px 12px;
-      text-align: right;
-    }
-    .modal-content footer button {
-      padding: 6px 12px;
-      font-size: 14px;
+    #globalControls button.active {
+      background:#4285f4; color:white; border-color:#2a56c6;
     }
 
     @media (max-width:600px) {
-      /* On small screens, windows may overlap, but can still be dragged */
       .window { width: 90vw; }
-      .modal-content { width: 90vw; }
+    }
+
+    /* Icon Maker Modal/Overlay */
+    #iconMakerOverlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    #iconMakerModal {
+      background: #fafafa;
+      width: 90vw; height: 90vh;
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    /* Left toolbar for icon maker */
+    #iconToolSidebar {
+      width: 200px;
+      background: #eee;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+    }
+    #iconToolSidebar h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    #iconToolSidebar label {
+      display: block;
+      margin: 8px 0 4px;
+      font-size: 14px;
+    }
+    #iconToolSidebar input[type="color"],
+    #iconToolSidebar select,
+    #iconToolSidebar input[type="number"],
+    #iconToolSidebar input[type="text"],
+    #iconToolSidebar button,
+    #iconToolSidebar input[type="range"] {
+      width: 100%;
+      margin-bottom: 8px;
+      box-sizing: border-box;
+    }
+    #iconToolSidebar .palette {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    #iconToolSidebar .palette .color-swatch {
+      width: 24px; height:24px;
+      border:1px solid #888;
+      cursor: pointer;
+    }
+
+    /* Icon editing canvas area */
+    #iconCanvasContainer {
+      flex: 1;
+      background:
+        /* checkerboard pattern for transparency */
+        linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
+        linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
+      background-size: 20px 20px;
+      background-position: 0 0,10px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    #iconCanvasContainer #iconCanvas {
+      /* Display larger but keep logical resolution 50x50 */
+      width: 400px;
+      height: 400px;
+      image-rendering: pixelated;
+      border: 1px solid #000;
+      cursor: crosshair;
+    }
+
+    /* Close button */
+    #iconMakerClose {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: #900;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      z-index: 10;
+    }
+
+    /* Icon selection panel in Paint Tools window */
+    #iconListContainer {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      padding: 4px;
+      margin-top: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    #iconListContainer .icon-item {
+      position: relative;
+      width: 50px; height:50px;
+      border: 1px solid #888;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+    #iconListContainer .icon-item.selected {
+      outline: 2px solid #4285f4;
+    }
+    #iconListContainer .icon-item img {
+      width: 100%; height:100%;
+      object-fit: contain;
+    }
+    #iconListContainer .icon-item .icon-name {
+      position: absolute;
+      bottom: 0; left: 0;
+      width:100%;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 10px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #iconListContainer .icon-item .remove-icon-btn {
+      position: absolute;
+      top: 0; right: 0;
+      background: rgba(200,0,0,0.8);
+      color: white;
+      border: none;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      width: 16px; height:16px;
+      text-align: center;
+      padding: 0;
     }
   </style>
 </head>
@@ -203,6 +285,8 @@
   <canvas id="canvas"></canvas>
 
   <!-- Draggable dropdown windows -->
+
+  <!-- Controls & Legends -->
   <details id="ctrlDropdown" class="window" style="top:10px; left:10px;" open>
     <summary>
       <span>Controls & Legends</span>
@@ -230,8 +314,7 @@
       <details style="margin-top:8px;">
         <summary>Medium Legend</summary>
         <div id="mediumLegend">
-          <!-- Populated by JS -->
-          <ul><li>Loading...</li></ul>
+          <span style="margin-top:8px;">&nbsp;</span>
         </div>
       </details>
       <details style="margin-top:8px;">
@@ -241,14 +324,16 @@
           <li><span style="display:inline-block;width:1em;height:1em;background:cyan;margin-right:4px"></span>P (−)</li>
           <li><span style="display:inline-block;width:1em;height:1em;background:green;margin-right:4px"></span>S (+)</li>
           <li><span style="display:inline-block;width:1em;height:1em;background:magenta;margin-right:4px"></span>S (−)</li>
+          <li><span style="display:inline-block;width:1em;height:1em;background:gray;margin-right:4px"></span>Neutral</li>
         </ul>
       </details>
     </div>
   </details>
 
-  <details id="paintDropdown" class="window" style="top:10px; left:310px;">
+  <!-- Paint, Text & Icon Tools -->
+  <details id="paintDropdown" class="window" style="top:10px; left:270px;">
     <summary>
-      <span>Paint Tools</span>
+      <span>Paint & Text & Icon Tools</span>
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
@@ -257,11 +342,13 @@
       <button id="rectBtn">Rectangle</button>
       <button id="sphereBtn">Sphere</button>
       <button id="fillBtn">Fill</button>
+      <button id="textBtn">Text</button>
+      <button id="iconBtn">Icon</button>
 
-      <label>Pen Width: <span id="penWidthLabel2">1</span></label>
+      <label>Pen Width (cells): <span id="penWidthLabel2">1</span></label>
       <input type="range" id="penWidth2" min="1" max="10" value="1">
 
-      <label>Eraser Size: <span id="eraserSizeLabel2">1</span></label>
+      <label>Eraser Size (cells): <span id="eraserSizeLabel2">1</span></label>
       <input type="range" id="eraserSize2" min="1" max="20" value="1">
 
       <label style="margin-top:8px;">
@@ -272,171 +359,121 @@
         <select id="paintMediumSelect"></select>
       </label>
 
-      <!-- Undo/Redo buttons side by side -->
-      <div style="display:flex; gap:8px; margin-top:8px;">
+      <!-- Text tool controls -->
+      <div id="textControls" style="display:none; margin-top:8px; border-top:1px solid #ccc; padding-top:8px;">
+        <label>Text Color:
+          <input type="color" id="textColor" value="#ffffff">
+        </label>
+        <label>Font:
+          <select id="fontSelect">
+            <option value="Roboto">Roboto</option>
+            <option value="Open Sans">Open Sans</option>
+            <option value="Arial" selected>Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+          </select>
+        </label>
+        <label>Size:
+          <input id="textSize" type="number" min="8" max="72" value="24">
+        </label>
+        <label>Opacity:
+          <input id="textOpacity" type="range" min="0" max="1" step="0.01" value="1">
+        </label>
+        <label><input type="checkbox" id="textBold"> Bold</label>
+        <label><input type="checkbox" id="textItalic"> Italic</label>
+      </div>
+
+      <!-- Undo/Redo -->
+      <div style="display:flex; gap:8px; margin-top:8px; border-top:1px solid #ccc; padding-top:8px;">
         <button id="undoBtn">Undo</button>
         <button id="redoBtn">Redo</button>
+      </div>
+
+      <!-- Icon Tool UI: hidden unless Icon tool is active -->
+      <div id="iconSection" style="display:none; margin-top:8px; border-top:1px solid #ccc; padding-top:8px;">
+        <label>Icons:</label>
+        <div id="iconListContainer">
+          <!-- Dynamically populated saved icons with remove buttons -->
+        </div>
+        <button id="openIconMakerBtn">Open Icon Maker</button>
+        <label style="margin-top:4px;">Load Icons (JSON or images):</label>
+        <input type="file" id="iconLoadInput" multiple accept=".json,image/*">
+        <button id="exportAllIconsBtn">Export All Icons</button>
       </div>
     </div>
   </details>
 
-  <details id="terrainDropdown" class="window" style="top:10px; left:630px;">
+  <!-- Terrain Generation -->
+  <details id="terrainDropdown" class="window" style="top:10px; left:530px;">
     <summary>
       <span>Terrain Generation</span>
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
-      <!-- Mode selector -->
-      <label>Mode:
-        <select id="terrainMode">
-          <option value="synthetic">Synthetic Metro Manila</option>
-          <option value="noise">Noise-based</option>
-          <option value="geojson">GeoJSON-based</option>
-        </select>
-      </label>
+      <label>Noise Scale: <span id="noiseScaleLabel">0.10</span></label>
+      <input id="noiseScale" type="range" min="0.01" max="0.5" step="0.01" value="0.10">
 
-      <!-- Synthetic controls -->
-      <div id="syntheticControls" style="margin-top:8px;">
-        <label>Water zone fraction:
-          <input id="synFracWater" type="number" min="0" max="1" step="0.01" value="0.1">
-        </label>
-        <label>Marine Clay fraction:
-          <input id="synFracClay" type="number" min="0" max="1" step="0.01" value="0.2">
-        </label>
-        <label>Alluvial Soil fraction:
-          <input id="synFracAlluvial" type="number" min="0" max="1" step="0.01" value="0.4">
-        </label>
-        <label>Volcanic Soil fraction:
-          <input id="synFracVolcanic" type="number" min="0" max="1" step="0.01" value="0.3">
-        </label>
-        <small style="font-size:12px; color:#555;">
-          Fractions will be normalized if sum ≠ 1.
-        </small>
-      </div>
+      <label>Water Threshold: <span id="waterThreshLabel">0.30</span></label>
+      <input id="waterThresh" type="range" min="0" max="1" step="0.01" value="0.30">
 
-      <!-- Noise controls -->
-      <div id="noiseControls" style="margin-top:8px; display:none;">
-        <label>Noise Scale: <span id="noiseScaleLabel">0.10</span></label>
-        <input id="noiseScale" type="range" min="0.01" max="0.5" step="0.01" value="0.10">
+      <label>Sand Threshold: <span id="sandThreshLabel">0.40</span></label>
+      <input id="sandThresh" type="range" min="0" max="1" step="0.01" value="0.40">
 
-        <label>Water Threshold: <span id="waterThreshLabel">0.30</span></label>
-        <input id="waterThresh" type="range" min="0" max="1" step="0.01" value="0.30">
+      <label>Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
+      <input id="rockThresh" type="range" min="0" max="1" step="0.01" value="0.70">
 
-        <label>Sand (Alluvial) Threshold: <span id="sandThreshLabel">0.40</span></label>
-        <input id="sandThresh" type="range" min="0" max="1" step="0.01" value="0.40">
-
-        <label>Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
-        <input id="rockThresh" type="range" min="0" max="1" step="0.01" value="0.70">
-      </div>
-
-      <!-- GeoJSON controls -->
-      <div id="geojsonControls" style="margin-top:8px; display:none;">
-        <label>Bounding Box (lat/lon):</label>
-        <label>latMin: <input id="latMin" type="number" step="0.0001" value="14.4"></label>
-        <label>latMax: <input id="latMax" type="number" step="0.0001" value="14.8"></label>
-        <label>lonMin: <input id="lonMin" type="number" step="0.0001" value="120.9"></label>
-        <label>lonMax: <input id="lonMax" type="number" step="0.0001" value="121.2"></label>
-
-        <label style="margin-top:6px;">
-          Upload GeoJSON:
-          <input type="file" id="soilGeojsonFile" accept=".json,.geojson">
-        </label>
-        <label style="margin-top:6px;">Mapping JSON (soilType → medium ID):
-          <textarea id="soilMappingJson" rows="3"
-            placeholder='e.g. {"Water":2,"Coastal Lowland":5,"Central Plateau":6,...}'></textarea>
-        </label>
-        <button id="applyGeojsonBtn">Load GeoJSON</button>
-        <div id="geojsonStatus" style="font-size:12px; color:#900; margin-top:4px;"></div>
-
-        <!-- GeoJSON Tutorial button, initially hidden; shown when mode=geojson -->
-        <button id="geojsonTutorialBtn" style="margin-top:8px; display:none;">GeoJSON Tutorial</button>
-      </div>
-
-      <!-- Apply Terrain -->
-      <button id="applyTerrain" style="margin-top:8px;">Apply Terrain</button>
-
-      <!-- Save / Load Terrain -->
-      <button id="saveTerrain" style="margin-top:8px;">Save Terrain</button>
-      <label style="margin-top:8px; display:block;">
-        Load Terrain File:
-        <input type="file" id="loadTerrainFile" accept=".json" style="margin-top:4px;">
-      </label>
-      <button id="loadTerrain" style="margin-top:4px;">Load Terrain</button>
+      <button id="generateTerrain" style="margin-top:8px;">Generate Terrain</button>
     </div>
   </details>
 
-  <!-- Modal overlay for tutorial -->
-  <div id="modalOverlay" class="modal-overlay">
-    <div class="modal-content">
-      <header>
-        <span>GeoJSON Usage Tutorial</span>
-        <button id="modalCloseBtn" style="background:transparent; border:none; color:white; font-size:18px; cursor:pointer;">&times;</button>
-      </header>
-      <div class="modal-body">
-        <p>This tutorial shows how to prepare and use a GeoJSON file to define soil/terrain regions for Metro Manila (or any region).</p>
-        <p><strong>1. Prepare a GeoJSON file</strong>: Your GeoJSON should have <code>Feature</code> objects with a <code>properties.soil_type</code> field whose values match keys in the Mapping JSON.</p>
-        <p>Example GeoJSON snippet:</p>
-        <pre style="background:#eee; padding:8px; border-radius:4px; font-size:13px; max-height:150px; overflow:auto;">
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "soil_type": "Coastal Lowland" },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [120.95,14.55], [120.98,14.55], [120.98,14.52], [120.95,14.52], [120.95,14.55]
-          ]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": { "soil_type": "Marikina Valley" },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [121.05,14.65], [121.10,14.65], [121.10,14.60], [121.05,14.60], [121.05,14.65]
-          ]
-        ]
-      }
-    }
-    // ... more features ...
-  ]
-}
-        </pre>
-        <p><strong>2. Mapping JSON</strong>: Provide a JSON object mapping each <code>soil_type</code> string to the corresponding medium ID. For example:</p>
-        <pre style="background:#eee; padding:8px; border-radius:4px; font-size:13px; max-height:120px; overflow:auto;">
-{
-  "Water": 2,
-  "Coastal Lowland": 5,
-  "Central Plateau": 6,
-  "Marikina Valley": 7,
-  "Novaliches Loam": 8,
-  "San Luis Clay": 9,
-  "Soft Soil": 0,
-  "Sand": 3,
-  "Rock": 4
-}
-        </pre>
-        <p><strong>3. Set bounding box</strong>: Enter latMin, latMax, lonMin, lonMax covering your GeoJSON region (e.g., Metro Manila approx 14.4–14.8 lat, 120.9–121.2 lon). The grid will map each cell’s center to a lat/lon via linear interpolation.</p>
-        <p><strong>4. Load GeoJSON</strong>: Click “Load GeoJSON” and ensure status says “GeoJSON loaded.”</p>
-        <p><strong>5. Apply Terrain</strong>: Click “Apply Terrain” to fill the grid according to your GeoJSON and mapping.</p>
-        <p>If any cell falls outside all features, it defaults to <code>Soft Soil</code> (ID 0). You can adjust default behavior in code if needed.</p>
-      </div>
-      <footer>
-        <button id="modalCloseBtnFooter">Close</button>
-      </footer>
-    </div>
-  </div>
-
-  <!-- Top-right: visibility & reset -->
+  <!-- Top-right: visibility & reset & toggle overlays-->
   <div id="globalControls">
     <button id="toggleAll">Toggle Windows</button>
     <button id="resetAll">Reset Windows</button>
+    <button id="toggleOverlayBtn" class="active">Hide Text/Icon</button>
+  </div>
+
+  <!-- Icon Maker Modal/Overlay -->
+  <div id="iconMakerOverlay">
+    <div id="iconMakerModal">
+      <button id="iconMakerClose">Close</button>
+      <div id="iconToolSidebar">
+        <h3>Icon Maker</h3>
+        <label>Color Picker:</label>
+        <input type="color" id="iconColorPicker" value="#000000">
+
+        <label>Pen Size (px):</label>
+        <input type="number" id="iconPenSize" min="1" max="10" value="1">
+        <label>Pen Size Slider:</label>
+        <input type="range" id="iconPenSizeRange" min="1" max="10" value="1">
+
+        <label>Tool:</label>
+        <select id="iconDrawTool">
+          <option value="pen">Pen</option>
+          <option value="eraser">Eraser</option>
+          <option value="fill">Fill</option>
+          <option value="rect">Rectangle</option>
+          <option value="circle">Circle</option>
+        </select>
+        <label style="margin-top:8px;">
+          <input type="checkbox" id="iconShapeHollow"> Hollow Shapes
+        </label>
+
+        <label>Palette (last used colors):</label>
+        <div class="palette" id="iconPalette"></div>
+        <button id="iconUndoBtn">Undo</button>
+        <button id="iconRedoBtn">Redo</button>
+        <label style="margin-top:8px;">Icon Name:</label>
+        <input type="text" id="iconNameInput" placeholder="icon_name">
+        <button id="iconSaveBtn">Save to Palette</button>
+        <button id="iconDownloadBtn">Download Icon JSON</button>
+        <label style="margin-top:12px;">Saved Icons:</label>
+        <div id="iconMakerList" style="max-height:200px; overflow-y:auto; border:1px solid #ccc; background:#fff; padding:4px; display:flex; flex-wrap: wrap; gap:4px;"></div>
+      </div>
+      <div id="iconCanvasContainer">
+        <!-- The 50×50 canvas: logical resolution 50×50, displayed larger with pixelated rendering -->
+        <canvas id="iconCanvas" width="50" height="50"></canvas>
+      </div>
+    </div>
   </div>
 
   <!-- Reference external JS -->
