@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Seismic Simulator with Icon & Text Toggle</title>
+  <title>Seismic Simulator with Full Terrain Generation</title>
   <!-- Google Fonts for Text tool -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -150,6 +150,21 @@
       overflow: hidden;
       box-shadow: 0 8px 16px rgba(0,0,0,0.5);
       position: relative;
+      animation: modal-enter 0.3s ease-out forwards;
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    @keyframes modal-enter {
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    @keyframes modal-exit {
+      to {
+        transform: scale(0.9);
+        opacity: 0;
+      }
     }
     /* Left toolbar for icon maker */
     #iconToolSidebar {
@@ -278,6 +293,59 @@
       text-align: center;
       padding: 0;
     }
+
+    /* Terrain Tutorial Modal */
+    #terrainTutorialOverlay {
+      position: fixed;
+      top:0; left:0;
+      width:100vw; height:100vh;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:10000;
+      backdrop-filter: blur(5px);
+      background: rgba(0,0,0,0.5);
+    }
+    #terrainTutorialModal {
+      background: #fafafa;
+      width: 80vw;
+      max-width: 500px;
+      padding: 16px;
+      border-radius: 8px;
+      position: relative;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+      transform: scale(0.9);
+      opacity: 0;
+      animation: tutorial-enter 0.3s ease-out forwards;
+    }
+    @keyframes tutorial-enter {
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    @keyframes tutorial-exit {
+      to {
+        transform: scale(0.9);
+        opacity: 0;
+      }
+    }
+    #terrainTutorialClose {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #900;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #terrainTutorialContent {
+      margin-top: 32px;
+      max-height: 60vh;
+      overflow-y: auto;
+      color: #111;
+    }
   </style>
 </head>
 <body>
@@ -310,6 +378,10 @@
       <button id="replay">Replay</button>
       <button id="finishSim">Finish</button>
       <button id="reload">Reload</button>
+
+      <!-- Save/Load Terrain -->
+      <button id="saveTerrainBtn">Save Terrain</button>
+      <button id="loadTerrainBtn">Load Terrain</button>
 
       <details style="margin-top:8px;">
         <summary>Medium Legend</summary>
@@ -409,17 +481,45 @@
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
-      <label>Noise Scale: <span id="noiseScaleLabel">0.10</span></label>
-      <input id="noiseScale" type="range" min="0.01" max="0.5" step="0.01" value="0.10">
+      <label>Generation Method:
+        <select id="terrainMethodSelect">
+          <option value="noise">Noise-based</option>
+          <option value="geojson">GeoJSON-based</option>
+        </select>
+      </label>
+      <!-- Noise controls -->
+      <div id="noiseControls">
+        <label>Noise Scale: <span id="noiseScaleLabel">0.10</span></label>
+        <input id="noiseScale" type="range" min="0.01" max="0.5" step="0.01" value="0.10">
 
-      <label>Water Threshold: <span id="waterThreshLabel">0.30</span></label>
-      <input id="waterThresh" type="range" min="0" max="1" step="0.01" value="0.30">
+        <label>Water Threshold: <span id="waterThreshLabel">0.30</span></label>
+        <input id="waterThresh" type="range" min="0" max="1" step="0.01" value="0.30">
 
-      <label>Sand Threshold: <span id="sandThreshLabel">0.40</span></label>
-      <input id="sandThresh" type="range" min="0" max="1" step="0.01" value="0.40">
+        <label>Sand Threshold: <span id="sandThreshLabel">0.40</span></label>
+        <input id="sandThresh" type="range" min="0" max="1" step="0.01" value="0.40">
 
-      <label>Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
-      <input id="rockThresh" type="range" min="0" max="1" step="0.01" value="0.70">
+        <label>Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
+        <input id="rockThresh" type="range" min="0" max="1" step="0.01" value="0.70">
+      </div>
+      <!-- GeoJSON controls (hidden initially) -->
+      <div id="geojsonControls" style="display:none; margin-top:8px; border-top:1px solid #ccc; padding-top:8px;">
+        <label>Load GeoJSON file:
+          <input type="file" id="geojsonFileInput" accept=".geojson,application/json">
+        </label>
+        <label>Bounding Box Min Lat:
+          <input type="number" id="bboxMinLat" placeholder="e.g. 14.5">
+        </label>
+        <label>Bounding Box Max Lat:
+          <input type="number" id="bboxMaxLat" placeholder="e.g. 14.8">
+        </label>
+        <label>Bounding Box Min Lng:
+          <input type="number" id="bboxMinLng" placeholder="e.g. 120.9">
+        </label>
+        <label>Bounding Box Max Lng:
+          <input type="number" id="bboxMaxLng" placeholder="e.g. 121.1">
+        </label>
+        <button id="terrainTutorialBtn">How to use GeoJSON</button>
+      </div>
 
       <button id="generateTerrain" style="margin-top:8px;">Generate Terrain</button>
     </div>
@@ -472,6 +572,61 @@
       <div id="iconCanvasContainer">
         <!-- The 50×50 canvas: logical resolution 50×50, displayed larger with pixelated rendering -->
         <canvas id="iconCanvas" width="50" height="50"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terrain Tutorial Modal -->
+  <div id="terrainTutorialOverlay">
+    <div id="terrainTutorialModal">
+      <button id="terrainTutorialClose">Close</button>
+      <div id="terrainTutorialContent">
+        <h2>GeoJSON-based Terrain Generation Tutorial</h2>
+        <p>
+          This mode lets you supply a GeoJSON file containing polygons with a property <code>mediumId</code> that matches one of the medium indices in the simulator. When you load the GeoJSON, you also enter a bounding box (Min Lat, Max Lat, Min Lng, Max Lng) corresponding to the region covered by the GeoJSON, so the simulator maps each grid cell center to a latitude/longitude within that box.
+        </p>
+        <ol>
+          <li>Prepare a GeoJSON file with Polygon or MultiPolygon features. Each feature’s <code>properties.mediumId</code> should be an integer matching one of the mediums in the “Medium Legend” (e.g., 0 = Soft Soil, 2 = Water, etc.).</li>
+          <li>In the bounding box inputs, enter:
+            <ul>
+              <li><strong>Min Lat</strong> and <strong>Max Lat</strong>: the southernmost and northernmost latitudes of your region.</li>
+              <li><strong>Min Lng</strong> and <strong>Max Lng</strong>: the westernmost and easternmost longitudes of your region.</li>
+            </ul>
+          </li>
+          <li>Click “Generate Terrain”. For each grid cell, the simulator computes the corresponding lat/lng:
+            <pre>lat = MinLat + (y + 0.5)/rows * (MaxLat - MinLat)
+lng = MinLng + (x + 0.5)/cols * (MaxLng - MinLng)</pre>
+            and tests which polygon contains that point. If a polygon with <code>mediumId</code> is found, the cell gets that medium. Otherwise it defaults to a fallback (Soft Soil).
+          </li>
+          <li>Example GeoJSON snippet:
+            <pre>{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "mediumId": 2 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.95, 14.55],
+            [120.98, 14.55],
+            [120.98, 14.58],
+            [120.95, 14.58],
+            [120.95, 14.55]
+          ]
+        ]
+      }
+    }
+  ]
+}</pre>
+            This marks that rectangle area as Water (mediumId 2). Adjust coordinates & IDs as needed.
+          </li>
+          <li>After loading, click Generate Terrain. The grid updates accordingly.</li>
+        </ol>
+        <p>
+          Make sure your GeoJSON’s coordinates and bounding box line up: the bounding box you provide should exactly cover the region of interest in your GeoJSON, so mapping is correct.
+        </p>
       </div>
     </div>
   </div>

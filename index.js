@@ -65,6 +65,7 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 // Disable image smoothing globally so icons drawn at scaled sizes stay pixelated
 ctx.imageSmoothingEnabled = false;
+
 let cols = 100, rows = 100, cellW, cellH;
 function resizeCanvas() {
   canvas.width = innerWidth;
@@ -87,7 +88,7 @@ class Medium {
   }
   propagate() { return !this.reflect; }
 }
-// Example Metro Manila soils + generic (placeholder values/colors)
+// Restore all previous mediums + any added types. Example values/colors; adjust as needed.
 const mediums = [
   new Medium(0, 'Soft Soil', '#884400', 1.0, 0.995, false),
   new Medium(1, 'Border', '#444444', 1.0, 0.5, true),
@@ -183,6 +184,9 @@ let iconPalette = [];
 let iconImageData = null; // ImageData for the 50×50 content
 let iconLastMouseXY = { x: -1, y: -1 };
 
+// Terrain GeoJSON data
+let loadedGeoJSON = null;
+
 // UI element references
 const originBtn = document.getElementById('originBtn');
 const startBtn = document.getElementById('startSim');
@@ -237,6 +241,9 @@ const iconDownloadBtn = document.getElementById('iconDownloadBtn');
 const iconMakerListDiv = document.getElementById('iconMakerList');
 
 // Terrain UI elements
+const terrainMethodSelect = document.getElementById('terrainMethodSelect');
+const noiseControlsDiv = document.getElementById('noiseControls');
+const geojsonControlsDiv = document.getElementById('geojsonControls');
 const noiseScaleInp   = document.getElementById('noiseScale');
 const waterThreshInp  = document.getElementById('waterThresh');
 const sandThreshInp   = document.getElementById('sandThresh');
@@ -246,9 +253,24 @@ const waterThreshLabel= document.getElementById('waterThreshLabel');
 const sandThreshLabel = document.getElementById('sandThreshLabel');
 const rockThreshLabel = document.getElementById('rockThreshLabel');
 const generateTerrainBtn = document.getElementById('generateTerrain');
+const geojsonFileInput = document.getElementById('geojsonFileInput');
+const bboxMinLatInp = document.getElementById('bboxMinLat');
+const bboxMaxLatInp = document.getElementById('bboxMaxLat');
+const bboxMinLngInp = document.getElementById('bboxMinLng');
+const bboxMaxLngInp = document.getElementById('bboxMaxLng');
+const terrainTutorialBtn = document.getElementById('terrainTutorialBtn');
 
 // Toggle overlays button
 const toggleOverlayBtn = document.getElementById('toggleOverlayBtn');
+
+// Save/Load Terrain buttons
+const saveTerrainBtn = document.getElementById('saveTerrainBtn');
+const loadTerrainBtn = document.getElementById('loadTerrainBtn');
+
+// Terrain Tutorial Modal
+const terrainTutorialOverlay = document.getElementById('terrainTutorialOverlay');
+const terrainTutorialModal = document.getElementById('terrainTutorialModal');
+const terrainTutorialClose = document.getElementById('terrainTutorialClose');
 
 // Button helpers
 function activateButtons(btns, activeId) {
@@ -323,10 +345,34 @@ function updateUIState() {
   exportAllIconsBtn.disabled = simRunning;
 
   // Terrain controls
-  noiseScaleInp.disabled = simRunning;
-  waterThreshInp.disabled = simRunning;
-  sandThreshInp.disabled = simRunning;
-  rockThreshInp.disabled = simRunning;
+  terrainMethodSelect.disabled = simRunning;
+  if (!simRunning) {
+    // method select always allowed
+    // But disable sub-controls accordingly
+    if (terrainMethodSelect.value === 'noise') {
+      noiseScaleInp.disabled = false;
+      waterThreshInp.disabled = false;
+      sandThreshInp.disabled = false;
+      rockThreshInp.disabled = false;
+      geojsonFileInput.disabled = true;
+      bboxMinLatInp.disabled = true;
+      bboxMaxLatInp.disabled = true;
+      bboxMinLngInp.disabled = true;
+      bboxMaxLngInp.disabled = true;
+      terrainTutorialBtn.disabled = true;
+    } else {
+      noiseScaleInp.disabled = true;
+      waterThreshInp.disabled = true;
+      sandThreshInp.disabled = true;
+      rockThreshInp.disabled = true;
+      geojsonFileInput.disabled = false;
+      bboxMinLatInp.disabled = false;
+      bboxMaxLatInp.disabled = false;
+      bboxMinLngInp.disabled = false;
+      bboxMaxLngInp.disabled = false;
+      terrainTutorialBtn.disabled = false;
+    }
+  }
   generateTerrainBtn.disabled = simRunning;
 
   // Undo/Redo
@@ -458,7 +504,6 @@ function renderIconCanvas() {
     iconCtx.save();
     iconCtx.strokeStyle = 'yellow';
     iconCtx.lineWidth = 1;
-    // strokeRect around the pixel
     iconCtx.strokeRect(hx + 0.5, hy + 0.5, 1 - 1, 1 - 1);
     iconCtx.restore();
   }
@@ -550,7 +595,6 @@ function iconEventToCanvasXY(e) {
   const scaleY = iconCanvas.height / rect.height;
   let x = Math.floor((e.clientX - rect.left) * scaleX);
   let y = Math.floor((e.clientY - rect.top) * scaleY);
-  // clamp
   x = Math.max(0, Math.min(iconCanvas.width-1, x));
   y = Math.max(0, Math.min(iconCanvas.height-1, y));
   return { x, y };
@@ -563,16 +607,14 @@ iconCanvas.addEventListener('mousemove', e => {
   if (simRunning) return;
   const tool = iconDrawToolSel.value;
   if (iconMakerIsDrawing && ['pen','eraser'].includes(tool)) {
-    // continue drawing
     if (tool === 'pen') {
       drawIconPixel(x, y, iconColorPicker.value);
     } else {
       drawIconPixel(x, y, null);
     }
   } else if (iconShapeStart && ['rect','circle'].includes(tool)) {
-    // Preview shape: restore base, then draw outline preview
     iconCtx.putImageData(iconShapePreviewData, 0, 0);
-    renderIconCanvas(); // draws grid+hover
+    renderIconCanvas();
     iconCtx.save();
     iconCtx.strokeStyle = iconColorPicker.value;
     iconCtx.lineWidth = 1;
@@ -594,7 +636,6 @@ iconCanvas.addEventListener('mousemove', e => {
     }
     iconCtx.restore();
   } else {
-    // simply re-render hover highlight
     renderIconCanvas();
   }
 });
@@ -622,7 +663,6 @@ iconCanvas.addEventListener('mousedown', e => {
   } else if (['rect','circle'].includes(tool)) {
     pushIconMakerState();
     iconShapeStart = { x, y };
-    // Save base for preview
     iconShapePreviewData = new ImageData(
       new Uint8ClampedArray(iconImageData.data),
       iconImageData.width,
@@ -639,16 +679,13 @@ window.addEventListener('mouseup', e => {
     renderIconCanvas();
   }
   if (iconShapeStart && ['rect','circle'].includes(tool)) {
-    // Finalize shape
     const { x: x0, y: y0 } = iconShapeStart;
     const { x: x1, y: y1 } = iconLastMouseXY;
-    // Restore base
     iconImageData = new ImageData(
       new Uint8ClampedArray(iconShapePreviewData.data),
       iconShapePreviewData.width,
       iconShapePreviewData.height
     );
-    // Draw final shape onto iconImageData
     const hollowShape = iconShapeHollowChk.checked;
     if (tool === 'rect') {
       const xmin = Math.min(x0, x1), xmax = Math.max(x0, x1);
@@ -681,7 +718,6 @@ window.addEventListener('mouseup', e => {
                   setIconPixel(iconImageData, xx, yy, iconColorPicker.value);
                 }
               } else {
-                // hollow: near boundary
                 if (dist2 >= 0.8 && dist2 <= 1.2) {
                   setIconPixel(iconImageData, xx, yy, iconColorPicker.value);
                 }
@@ -691,9 +727,7 @@ window.addEventListener('mouseup', e => {
         }
       }
     }
-    // After modifying iconImageData, render
     renderIconCanvas();
-    // Clear shape state
     iconShapeStart = null;
     iconShapePreviewData = null;
   }
@@ -703,14 +737,12 @@ window.addEventListener('mouseup', e => {
 function setIconPixel(imageData, x, y, color) {
   const idx = (y * imageData.width + x) * 4;
   if (color) {
-    // parse hex to RGBA
     const rgba = hexToRgba(color);
     imageData.data[idx]   = rgba[0];
     imageData.data[idx+1] = rgba[1];
     imageData.data[idx+2] = rgba[2];
     imageData.data[idx+3] = rgba[3];
   } else {
-    // clear
     imageData.data[idx+3] = 0;
   }
 }
@@ -808,7 +840,13 @@ function showIconMaker() {
   iconMakerOverlay.style.display = 'flex';
 }
 function hideIconMaker() {
-  iconMakerOverlay.style.display = 'none';
+  // animate exit
+  terrainTutorialOverlay.style.pointerEvents = 'none'; // ensure no conflict
+  iconMakerModal.style.animation = 'modal-exit 0.2s ease-in forwards';
+  setTimeout(() => {
+    iconMakerOverlay.style.display = 'none';
+    iconMakerModal.style.animation = 'modal-enter 0.3s ease-out forwards';
+  }, 200);
   refreshIconListUI();
 }
 
@@ -819,7 +857,6 @@ iconSaveBtn.addEventListener('click', () => {
     alert('Enter an icon name');
     return;
   }
-  // Render current iconImageData to a temporary canvas to get dataURL
   const tmp = document.createElement('canvas');
   tmp.width = iconCanvas.width;
   tmp.height = iconCanvas.height;
@@ -939,9 +976,7 @@ function loadIconIntoMaker(idx) {
   const icon = icons[idx];
   const img = new Image();
   img.onload = () => {
-    // Reset imageData
     iconImageData = iconCtx.createImageData(iconCanvas.width, iconCanvas.height);
-    // Draw image into a temp canvas to extract pixel data
     const tmp = document.createElement('canvas');
     tmp.width = iconCanvas.width;
     tmp.height = iconCanvas.height;
@@ -951,7 +986,6 @@ function loadIconIntoMaker(idx) {
     img.height = tmp.height;
     tctx.drawImage(img, 0, 0, tmp.width, tmp.height);
     const data = tctx.getImageData(0,0,tmp.width,tmp.height).data;
-    // Copy into iconImageData
     for (let i = 0; i < data.length; i++) {
       iconImageData.data[i] = data[i];
     }
@@ -1066,25 +1100,167 @@ rockThreshInp.addEventListener('input', e => {
   rockThreshLabel.innerText = rockThresh.toFixed(2);
 });
 
+// Terrain method select
+terrainMethodSelect.addEventListener('change', () => {
+  if (terrainMethodSelect.value === 'noise') {
+    noiseControlsDiv.style.display = '';
+    geojsonControlsDiv.style.display = 'none';
+  } else {
+    noiseControlsDiv.style.display = 'none';
+    geojsonControlsDiv.style.display = '';
+  }
+  updateUIState();
+});
+// On load:
+if (terrainMethodSelect.value === 'noise') {
+  noiseControlsDiv.style.display = '';
+  geojsonControlsDiv.style.display = 'none';
+} else {
+  noiseControlsDiv.style.display = 'none';
+  geojsonControlsDiv.style.display = '';
+}
+
+// Load GeoJSON file
+geojsonFileInput.addEventListener('change', () => {
+  const file = geojsonFileInput.files[0];
+  if (!file) {
+    loadedGeoJSON = null;
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const geo = JSON.parse(e.target.result);
+      if (geo.type === 'FeatureCollection' && Array.isArray(geo.features)) {
+        loadedGeoJSON = geo;
+        alert('GeoJSON loaded: ' + geo.features.length + ' features.');
+      } else {
+        alert('Invalid GeoJSON: must be a FeatureCollection.');
+        loadedGeoJSON = null;
+      }
+    } catch (err) {
+      alert('Error parsing GeoJSON: ' + err.message);
+      loadedGeoJSON = null;
+    }
+  };
+  reader.readAsText(file);
+});
+
+// Point-in-polygon test (ray-casting)
+function pointInPolygon(lat, lng, coords) {
+  // coords: array of [lng, lat]
+  let inside = false;
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const xi = coords[i][0], yi = coords[i][1];
+    const xj = coords[j][0], yj = coords[j][1];
+    const intersect = ((yi > lat) !== (yj > lat))
+      && (lng < (xj - xi) * (lat - yi) / (yj - yi + 0.0) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Generate terrain
 generateTerrainBtn.addEventListener('click', () => {
   if (simRunning) return;
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) {
-        mediumGrid[y][x] = 1; // border
-      } else {
-        const nx = x * noiseScale;
-        const ny = y * noiseScale;
-        const v = noise(nx, ny);
-        let m;
-        if (v < waterThresh) m = 2;        // Water
-        else if (v < sandThresh) m = 5;    // Coastal Lowland
-        else if (v < rockThresh) m = 6;    // Central Plateau
-        else m = 4;                        // Rock
-        mediumGrid[y][x] = m;
+  if (terrainMethodSelect.value === 'noise') {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) {
+          mediumGrid[y][x] = 1; // border
+        } else {
+          const nx = x * noiseScale;
+          const ny = y * noiseScale;
+          const v = noise(nx, ny);
+          let m;
+          if (v < waterThresh) m = 2;        // Water
+          else if (v < sandThresh) m = 5;    // Coastal Lowland
+          else if (v < rockThresh) m = 6;    // Central Plateau
+          else m = 4;                        // Rock
+          mediumGrid[y][x] = m;
+        }
       }
     }
+    alert('Noise-based terrain generated.');
+  } else {
+    // GeoJSON-based
+    if (!loadedGeoJSON) {
+      alert('No GeoJSON loaded.');
+      return;
+    }
+    const minLat = parseFloat(bboxMinLatInp.value);
+    const maxLat = parseFloat(bboxMaxLatInp.value);
+    const minLng = parseFloat(bboxMinLngInp.value);
+    const maxLng = parseFloat(bboxMaxLngInp.value);
+    if (isNaN(minLat) || isNaN(maxLat) || isNaN(minLng) || isNaN(maxLng) || minLat >= maxLat || minLng >= maxLng) {
+      alert('Enter valid bounding box values.');
+      return;
+    }
+    // Preprocess features: for each feature, extract geometry arrays of coordinates and mediumId
+    const features = loadedGeoJSON.features;
+    const polygons = [];
+    features.forEach(feat => {
+      const props = feat.properties || {};
+      const mediumId = parseInt(props.mediumId, 10);
+      if (isNaN(mediumId) || mediumId < 0 || mediumId >= mediums.length) {
+        // skip or default
+        return;
+      }
+      const geom = feat.geometry;
+      if (!geom) return;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          polygons.push({ coords: ring, mediumId });
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            polygons.push({ coords: ring, mediumId });
+          });
+        });
+      }
+    });
+    if (polygons.length === 0) {
+      alert('No valid polygons with mediumId found in GeoJSON.');
+      return;
+    }
+    // For each grid cell, compute lat/lng of center, test each polygon in order
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) {
+          mediumGrid[y][x] = 1; // border
+        } else {
+          const lat = minLat + (y + 0.5)/rows * (maxLat - minLat);
+          const lng = minLng + (x + 0.5)/cols * (maxLng - minLng);
+          let assigned = false;
+          for (const poly of polygons) {
+            if (pointInPolygon(lat, lng, poly.coords)) {
+              mediumGrid[y][x] = poly.mediumId;
+              assigned = true;
+              break;
+            }
+          }
+          if (!assigned) {
+            // default fallback
+            mediumGrid[y][x] = 0; // Soft Soil
+          }
+        }
+      }
+    }
+    alert('GeoJSON-based terrain generated.');
   }
+});
+
+// Terrain Tutorial popup
+terrainTutorialBtn.addEventListener('click', () => {
+  terrainTutorialOverlay.style.display = 'flex';
+  terrainTutorialModal.style.animation = 'tutorial-enter 0.3s ease-out forwards';
+});
+terrainTutorialClose.addEventListener('click', () => {
+  terrainTutorialModal.style.animation = 'tutorial-exit 0.2s ease-in forwards';
+  setTimeout(() => {
+    terrainTutorialOverlay.style.display = 'none';
+  }, 200);
 });
 
 // — Mouse & Painting/Origin/Text/Icon placement —
@@ -1104,7 +1280,6 @@ canvas.addEventListener('mousemove', e => {
       handleTextMouseMove(e);
     }
   } else if (drawTool === 'icon') {
-    // If dragging/resizing a placed icon:
     if (selectedPlacementIndex !== null && iconPlacementAction) {
       handleIconPlacementMouseMove(e);
     }
@@ -1142,22 +1317,17 @@ canvas.addEventListener('mousedown', e => {
     handleTextMouseDown(e);
     selectedPlacementIndex = null;
   } else if (drawTool === 'icon') {
-    // First check if clicking on existing placed icon to select
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
     const foundIndex = findIconPlacementAt(clickX, clickY);
     if (foundIndex !== null) {
-      // Select this placed icon
       selectedPlacementIndex = foundIndex;
-      // Determine if click on resize handle
       const ic = iconPlacements[foundIndex];
       const boxX = ic.x, boxY = ic.y, boxW = ic.width, boxH = ic.height;
       const handleSize = 10;
-      const hx = boxX + boxW;
-      const hy = boxY + boxH;
-      if (clickX >= hx - handleSize && clickX <= hx + handleSize &&
-          clickY >= hy - handleSize && clickY <= hy + handleSize) {
+      if (clickX >= boxX + boxW - handleSize && clickX <= boxX + boxW + handleSize &&
+          clickY >= boxY + boxH - handleSize && clickY <= boxY + boxH + handleSize) {
         iconPlacementAction = 'resize';
         iconPlacementResizeOrig = {
           origWidth: ic.width,
@@ -1171,12 +1341,10 @@ canvas.addEventListener('mousedown', e => {
         iconPlacementDragOffset.dy = clickY - ic.y;
       }
       pushStateForUndo();
-      // Deselect text
       selectedTextIndex = null;
       typingMode = false;
       editingIndex = null;
     } else {
-      // Not clicking existing icon: place new if an icon is selected
       if (gm && selectedIconIndex !== null && icons[selectedIconIndex]) {
         pushStateForUndo();
         const iconDataURL = icons[selectedIconIndex].dataURL;
@@ -1192,7 +1360,6 @@ canvas.addEventListener('mousedown', e => {
       } else {
         selectedPlacementIndex = null;
       }
-      // Deselect text
       selectedTextIndex = null;
       typingMode = false;
       editingIndex = null;
@@ -1257,7 +1424,6 @@ function handleIconPlacementMouseMove(e) {
     const { origWidth, origHeight, origX, origY } = iconPlacementResizeOrig;
     const dx = mouseX - origX;
     const dy = mouseY - origY;
-    // Determine scale: integer multiples of 50
     const factorX = Math.max(1, Math.round(dx / 50));
     const factorY = Math.max(1, Math.round(dy / 50));
     const factor = Math.max(1, Math.min(factorX, factorY));
@@ -1458,7 +1624,6 @@ function draw() {
   // draw placed icons if overlays shown
   if (showOverlays) {
     iconPlacements.forEach((ic, idx) => {
-      // Use cached Image object
       const img = ic.img;
       if (img) {
         if (img.complete) {
@@ -1475,7 +1640,6 @@ function draw() {
         ctx.strokeStyle = 'yellow';
         ctx.lineWidth = 2;
         ctx.strokeRect(ic.x, ic.y, ic.width, ic.height);
-        // resize handle at bottom-right
         const handleSize = 10;
         ctx.fillStyle = 'yellow';
         ctx.fillRect(ic.x + ic.width - handleSize/2, ic.y + ic.height - handleSize/2, handleSize, handleSize);
@@ -1506,7 +1670,6 @@ function draw() {
         ctx.strokeStyle = 'yellow';
         ctx.lineWidth = 1;
         ctx.strokeRect(boxX, boxY, textWidth, textHeight);
-        // resize handle
         const handleSize = 8;
         ctx.fillStyle = 'yellow';
         ctx.fillRect(te.x + textWidth - handleSize/2, te.y - handleSize/2, handleSize, handleSize);
@@ -1605,9 +1768,6 @@ function loop(ts) {
 }
 requestAnimationFrame(loop);
 
-// ===== Terrain generation helper functions =====
-// Already set up above via noise-based generation
-
 // ===== Text tool handlers =====
 function handleTextMouseDown(e) {
   const rect = canvas.getBoundingClientRect();
@@ -1648,7 +1808,6 @@ function handleTextMouseDown(e) {
     textOpacityInp.value = te.opacity;
     textBoldChk.checked = te.bold;
     textItalicChk.checked = te.italic;
-    // Check resize handle
     ctx.save();
     let fontStr = '';
     if (te.italic) fontStr += 'italic ';
@@ -2025,7 +2184,6 @@ undoBtn.addEventListener('click', () => {
     bold: te.bold,
     italic: te.italic
   }));
-  // Reconstruct iconPlacements with cached Image objects
   iconPlacements = prev.iconPlacements.map(ic => {
     const img = new Image();
     img.src = ic.dataURL;
@@ -2072,7 +2230,6 @@ redoBtn.addEventListener('click', () => {
     bold: te.bold,
     italic: te.italic
   }));
-  // Reconstruct iconPlacements with cached Image objects
   iconPlacements = next.iconPlacements.map(ic => {
     const img = new Image();
     img.src = ic.dataURL;
@@ -2086,8 +2243,8 @@ redoBtn.addEventListener('click', () => {
   updateUIState();
 });
 
-// ===== Simulation physics helpers =====
-// Already defined above: updatePhysics, etc.
+// ===== Simulation control =====
+// Already above
 
 // ===== Toggle Overlays Button =====
 toggleOverlayBtn.addEventListener('click', () => {
@@ -2095,6 +2252,133 @@ toggleOverlayBtn.addEventListener('click', () => {
   updateUIState();
 });
 
-// ===== Simulation control =====
-// Already above
+// ===== Save/Load Terrain =====
+saveTerrainBtn.addEventListener('click', () => {
+  // Collect state: mediumGrid, origins, textElements, iconPlacements
+  const gridArr = mediumGrid.map(row => Array.from(row));
+  const data = {
+    mediumGrid: gridArr,
+    origins: origins.map(pt => ({ x: pt.x, y: pt.y, mag: pt.mag })),
+    textElements: textElements.map(te => ({
+      text: te.text,
+      x: te.x, y: te.y,
+      color: te.color,
+      fontFamily: te.fontFamily,
+      fontSize: te.fontSize,
+      opacity: te.opacity,
+      bold: te.bold,
+      italic: te.italic
+    })),
+    icons: icons.slice(), // saved palette icons
+    iconPlacements: iconPlacements.map(ic => ({
+      dataURL: ic.dataURL,
+      x: ic.x, y: ic.y,
+      width: ic.width, height: ic.height
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const filename = prompt('Enter filename to save terrain (without extension):', 'terrain_save');
+  if (filename) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename + '.json';
+    a.click();
+  }
+  URL.revokeObjectURL(url);
+});
 
+loadTerrainBtn.addEventListener('click', () => {
+  if (simRunning) {
+    alert('Finish simulation before loading.');
+    return;
+  }
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const obj = JSON.parse(e.target.result);
+        if (!obj.mediumGrid || !Array.isArray(obj.mediumGrid)) {
+          alert('Invalid save file.');
+          return;
+        }
+        pushStateForUndo();
+        // Restore mediumGrid
+        for (let y = 0; y < rows; y++) {
+          if (Array.isArray(obj.mediumGrid[y])) {
+            for (let x = 0; x < cols; x++) {
+              mediumGrid[y][x] = obj.mediumGrid[y][x] ?? 0;
+            }
+          }
+        }
+        // Restore origins
+        origins = [];
+        if (Array.isArray(obj.origins)) {
+          obj.origins.forEach(pt => {
+            if (typeof pt.x === 'number' && typeof pt.y === 'number' && typeof pt.mag === 'number') {
+              origins.push({ x: pt.x, y: pt.y, mag: pt.mag });
+            }
+          });
+        }
+        refreshOriginsList();
+        // Restore textElements
+        textElements = [];
+        if (Array.isArray(obj.textElements)) {
+          obj.textElements.forEach(te => {
+            if (typeof te.text === 'string') {
+              textElements.push({
+                text: te.text,
+                x: te.x, y: te.y,
+                color: te.color,
+                fontFamily: te.fontFamily,
+                fontSize: te.fontSize,
+                opacity: te.opacity,
+                bold: te.bold,
+                italic: te.italic
+              });
+            }
+          });
+        }
+        // Restore icons palette
+        if (Array.isArray(obj.icons)) {
+          icons = obj.icons.filter(ic => ic.name && ic.dataURL);
+          saveIconsToStorage();
+        }
+        refreshIconListUI();
+        refreshIconMakerListUI();
+        // Restore placements
+        iconPlacements = [];
+        if (Array.isArray(obj.iconPlacements)) {
+          obj.iconPlacements.forEach(ic => {
+            if (ic.dataURL && typeof ic.x === 'number' && typeof ic.y === 'number' &&
+                typeof ic.width === 'number' && typeof ic.height === 'number') {
+              const img = new Image();
+              img.src = ic.dataURL;
+              iconPlacements.push({ dataURL: ic.dataURL, img: img, x: ic.x, y: ic.y, width: ic.width, height: ic.height });
+            }
+          });
+        }
+        selectedTextIndex = null;
+        typingMode = false;
+        editingIndex = null;
+        selectedPlacementIndex = null;
+        updateUIState();
+        alert('Terrain loaded.');
+      } catch(err) {
+        alert('Error loading file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+});
+
+// ===== Simulation physics helpers =====
+// Already defined above
+
+// ===== End of index.js =====
