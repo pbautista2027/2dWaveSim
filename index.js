@@ -88,7 +88,8 @@ class Medium {
   }
   propagate() { return !this.reflect; }
 }
-// Restore all previous mediums + any added types. Example values/colors; adjust as needed.
+// Example mediums; adjust as required (Philippines soil types etc.)
+// Ensure all original mediums are back plus added ones.
 const mediums = [
   new Medium(0, 'Soft Soil', '#884400', 1.0, 0.995, false),
   new Medium(1, 'Border', '#444444', 1.0, 0.5, true),
@@ -148,7 +149,8 @@ function resetFields() {
 
 // — State & UI Bindings —
 // Tools: 'origin', 'pen', 'eraser', 'rect', 'sphere', 'fill', 'text', 'icon'
-let drawTool = 'origin', penW = 1, eraserW = 1, hollow = false;
+let drawTool = 'origin';
+let penW = 0, eraserW = 0, hollow = false; // penW=0 => radius 0 => 1 cell
 let origins = []; // {x,y,mag}
 let simRunning = false;
 let lastMouse = { x: 0, y: 0 }, preview = null, shapeStart = null;
@@ -263,7 +265,7 @@ const terrainTutorialBtn = document.getElementById('terrainTutorialBtn');
 // Toggle overlays button
 const toggleOverlayBtn = document.getElementById('toggleOverlayBtn');
 
-// Save/Load Terrain buttons
+// Save/Load Terrain buttons (moved here)
 const saveTerrainBtn = document.getElementById('saveTerrainBtn');
 const loadTerrainBtn = document.getElementById('loadTerrainBtn');
 
@@ -347,8 +349,6 @@ function updateUIState() {
   // Terrain controls
   terrainMethodSelect.disabled = simRunning;
   if (!simRunning) {
-    // method select always allowed
-    // But disable sub-controls accordingly
     if (terrainMethodSelect.value === 'noise') {
       noiseScaleInp.disabled = false;
       waterThreshInp.disabled = false;
@@ -374,6 +374,10 @@ function updateUIState() {
     }
   }
   generateTerrainBtn.disabled = simRunning;
+
+  // Save/Load Terrain
+  saveTerrainBtn.disabled = simRunning;
+  loadTerrainBtn.disabled = simRunning;
 
   // Undo/Redo
   updateUndoRedoButtons();
@@ -841,7 +845,6 @@ function showIconMaker() {
 }
 function hideIconMaker() {
   // animate exit
-  terrainTutorialOverlay.style.pointerEvents = 'none'; // ensure no conflict
   iconMakerModal.style.animation = 'modal-exit 0.2s ease-in forwards';
   setTimeout(() => {
     iconMakerOverlay.style.display = 'none';
@@ -1326,14 +1329,15 @@ canvas.addEventListener('mousedown', e => {
       const ic = iconPlacements[foundIndex];
       const boxX = ic.x, boxY = ic.y, boxW = ic.width, boxH = ic.height;
       const handleSize = 10;
+      // For scaling: only allow integer multiples. We'll compute relative to 50px base.
       if (clickX >= boxX + boxW - handleSize && clickX <= boxX + boxW + handleSize &&
           clickY >= boxY + boxH - handleSize && clickY <= boxY + boxH + handleSize) {
         iconPlacementAction = 'resize';
         iconPlacementResizeOrig = {
-          origWidth: ic.width,
-          origHeight: ic.height,
           origX: ic.x,
-          origY: ic.y
+          origY: ic.y,
+          origWidth: ic.width,
+          origHeight: ic.height
         };
       } else {
         iconPlacementAction = 'drag';
@@ -1348,15 +1352,16 @@ canvas.addEventListener('mousedown', e => {
       if (gm && selectedIconIndex !== null && icons[selectedIconIndex]) {
         pushStateForUndo();
         const iconDataURL = icons[selectedIconIndex].dataURL;
-        const x = (e.clientX - canvas.getBoundingClientRect().left) - 25;
-        const y = (e.clientY - canvas.getBoundingClientRect().top) - 25;
         const img = new Image();
         img.src = iconDataURL;
-        iconPlacements.push({ dataURL: iconDataURL, img: img, x: x, y: y, width: 50, height: 50 });
+        // Place centered on click
+        const placedX = (e.clientX - canvas.getBoundingClientRect().left) - 25;
+        const placedY = (e.clientY - canvas.getBoundingClientRect().top) - 25;
+        iconPlacements.push({ dataURL: iconDataURL, img: img, x: placedX, y: placedY, width: 50, height: 50 });
         selectedPlacementIndex = iconPlacements.length - 1;
         iconPlacementAction = 'drag';
-        iconPlacementDragOffset.dx = (e.clientX - canvas.getBoundingClientRect().left) - x;
-        iconPlacementDragOffset.dy = (e.clientY - canvas.getBoundingClientRect().top) - y;
+        iconPlacementDragOffset.dx = (e.clientX - canvas.getBoundingClientRect().left) - placedX;
+        iconPlacementDragOffset.dy = (e.clientY - canvas.getBoundingClientRect().top) - placedY;
       } else {
         selectedPlacementIndex = null;
       }
@@ -1421,15 +1426,17 @@ function handleIconPlacementMouseMove(e) {
     ic.x = mouseX - iconPlacementDragOffset.dx;
     ic.y = mouseY - iconPlacementDragOffset.dy;
   } else if (iconPlacementAction === 'resize' && iconPlacementResizeOrig) {
-    const { origWidth, origHeight, origX, origY } = iconPlacementResizeOrig;
-    const dx = mouseX - origX;
-    const dy = mouseY - origY;
-    const factorX = Math.max(1, Math.round(dx / 50));
-    const factorY = Math.max(1, Math.round(dy / 50));
+    // Compute new size as integer multiple of base 50px
+    const { origX, origY } = iconPlacementResizeOrig;
+    const deltaX = mouseX - origX;
+    const deltaY = mouseY - origY;
+    // Determine scale factor: floor(delta / 50 + 0.5)
+    const factorX = Math.max(1, Math.round(deltaX / 50));
+    const factorY = Math.max(1, Math.round(deltaY / 50));
+    // Use smaller factor to keep square
     const factor = Math.max(1, Math.min(factorX, factorY));
-    const newSize = 50 * factor;
-    ic.width = newSize;
-    ic.height = newSize;
+    ic.width = 50 * factor;
+    ic.height = 50 * factor;
     ic.x = origX;
     ic.y = origY;
   }
@@ -1448,6 +1455,7 @@ function toGrid(e) {
 function paintAt(cx, cy) {
   if (simRunning) return;
   const mid = +paintSelect.value;
+  // penW is radius in cells; penW=0 => only center cell
   if (drawTool === 'pen') {
     for (let dy = -penW; dy <= penW; dy++) {
       for (let dx = -penW; dx <= penW; dx++) {
@@ -2139,10 +2147,12 @@ paintButtons.forEach(btnEl => {
 // Pen/Eraser/Hollow sliders
 document.getElementById('penWidth2').addEventListener('input', e => {
   penW = +e.target.value;
+  if (penW < 0) penW = 0;
   document.getElementById('penWidthLabel2').innerText = penW;
 });
 document.getElementById('eraserSize2').addEventListener('input', e => {
   eraserW = +e.target.value;
+  if (eraserW < 0) eraserW = 0;
   document.getElementById('eraserSizeLabel2').innerText = eraserW;
 });
 document.getElementById('shapeHollow2').addEventListener('change', e => {
@@ -2243,9 +2253,6 @@ redoBtn.addEventListener('click', () => {
   updateUIState();
 });
 
-// ===== Simulation control =====
-// Already above
-
 // ===== Toggle Overlays Button =====
 toggleOverlayBtn.addEventListener('click', () => {
   showOverlays = !showOverlays;
@@ -2254,7 +2261,7 @@ toggleOverlayBtn.addEventListener('click', () => {
 
 // ===== Save/Load Terrain =====
 saveTerrainBtn.addEventListener('click', () => {
-  // Collect state: mediumGrid, origins, textElements, iconPlacements
+  // Collect state: mediumGrid, origins, textElements, iconPlacements, icons palette
   const gridArr = mediumGrid.map(row => Array.from(row));
   const data = {
     mediumGrid: gridArr,

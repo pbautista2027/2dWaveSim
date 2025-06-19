@@ -379,10 +379,6 @@
       <button id="finishSim">Finish</button>
       <button id="reload">Reload</button>
 
-      <!-- Save/Load Terrain -->
-      <button id="saveTerrainBtn">Save Terrain</button>
-      <button id="loadTerrainBtn">Load Terrain</button>
-
       <details style="margin-top:8px;">
         <summary>Medium Legend</summary>
         <div id="mediumLegend">
@@ -417,11 +413,12 @@
       <button id="textBtn">Text</button>
       <button id="iconBtn">Icon</button>
 
-      <label>Pen Width (cells): <span id="penWidthLabel2">1</span></label>
-      <input type="range" id="penWidth2" min="1" max="10" value="1">
+      <!-- Pen/Eraser width sliders changed: min="0" so 0 → radius 0 → affect exactly 1 cell -->
+      <label>Pen Radius (cells): <span id="penWidthLabel2">0</span></label>
+      <input type="range" id="penWidth2" min="0" max="10" value="0">
 
-      <label>Eraser Size (cells): <span id="eraserSizeLabel2">1</span></label>
-      <input type="range" id="eraserSize2" min="1" max="20" value="1">
+      <label>Eraser Radius (cells): <span id="eraserSizeLabel2">0</span></label>
+      <input type="range" id="eraserSize2" min="0" max="20" value="0">
 
       <label style="margin-top:8px;">
         <input type="checkbox" id="shapeHollow2"> Hollow Shapes
@@ -474,10 +471,10 @@
     </div>
   </details>
 
-  <!-- Terrain Generation -->
+  <!-- Terrain -->
   <details id="terrainDropdown" class="window" style="top:10px; left:530px;">
     <summary>
-      <span>Terrain Generation</span>
+      <span>Terrain</span>
       <span class="drag-handle">⣿</span>
     </summary>
     <div class="content">
@@ -522,6 +519,10 @@
       </div>
 
       <button id="generateTerrain" style="margin-top:8px;">Generate Terrain</button>
+
+      <!-- Save/Load Terrain moved here -->
+      <button id="saveTerrainBtn" style="margin-top:8px;">Save Terrain</button>
+      <button id="loadTerrainBtn">Load Terrain</button>
     </div>
   </details>
 
