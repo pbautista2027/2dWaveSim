@@ -406,9 +406,9 @@
     </summary>
     <div class="content">
       <button id="penBtn">Pen</button>
-      <button id="eraserBtn">Eraser</button>
       <button id="rectBtn">Rectangle</button>
       <button id="sphereBtn">Sphere</button>
+      <button id="eraserBtn">Eraser</button>
       <button id="fillBtn">Fill</button>
       <button id="textBtn">Text</button>
       <button id="iconBtn">Icon</button>
@@ -481,7 +481,6 @@
       <label>Generation Method:
         <select id="terrainMethodSelect">
           <option value="noise">Noise-based</option>
-          <option value="geojson">GeoJSON-based</option>
         </select>
       </label>
       <!-- Noise controls -->
@@ -489,33 +488,14 @@
         <label>Noise Scale: <span id="noiseScaleLabel">0.10</span></label>
         <input id="noiseScale" type="range" min="0.01" max="0.5" step="0.01" value="0.10">
 
-        <label>Water Threshold: <span id="waterThreshLabel">0.30</span></label>
+        <label>Water Th shold: <span id="waterThreshLabel">0.30</span></label>
         <input id="waterThresh" type="range" min="0" max="1" step="0.01" value="0.30">
 
         <label>Sand Threshold: <span id="sandThreshLabel">0.40</span></label>
         <input id="sandThresh" type="range" min="0" max="1" step="0.01" value="0.40">
 
-        <label>Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
+        Rock Threshold: <span id="rockThreshLabel">0.70</span></label>
         <input id="rockThresh" type="range" min="0" max="1" step="0.01" value="0.70">
-      </div>
-      <!-- GeoJSON controls (hidden initially) -->
-      <div id="geojsonControls" style="display:none; margin-top:8px; border-top:1px solid #ccc; padding-top:8px;">
-        <label>Load GeoJSON file:
-          <input type="file" id="geojsonFileInput" accept=".geojson,application/json">
-        </label>
-        <label>Bounding Box Min Lat:
-          <input type="number" id="bboxMinLat" placeholder="e.g. 14.5">
-        </label>
-        <label>Bounding Box Max Lat:
-          <input type="number" id="bboxMaxLat" placeholder="e.g. 14.8">
-        </label>
-        <label>Bounding Box Min Lng:
-          <input type="number" id="bboxMinLng" placeholder="e.g. 120.9">
-        </label>
-        <label>Bounding Box Max Lng:
-          <input type="number" id="bboxMaxLng" placeholder="e.g. 121.1">
-        </label>
-        <button id="terrainTutorialBtn">How to use GeoJSON</button>
       </div>
 
       <button id="generateTerrain" style="margin-top:8px;">Generate Terrain</button>
@@ -526,8 +506,31 @@
     </div>
   </details>
 
+  <!-- Seismograph -->
+  <details id="seismographDropdown" class="window" style="top:10px; left:790px; display:none">
+    <summary>
+      <span>Seismograph</span>
+      <span class="drag-handle">⣿</span>
+    </summary>
+    <div class="content">
+      <button id="addSeismograph" style="margin-top:8px;">Add Seismograph</button>
+      <button id="viewSeismograph" style="margin-top:8px;">View Seismograph</button>
+      <label style="margin-top:4px; margin-bottom:2px;">Seismographs (click canvas to add):</label>
+      <div id="seismographsList">
+        <div style="font-size:13px; color:#666;">No seismographs yet</div>
+      </div>
+      <details style="margin-top:8px;">
+        <summary>Seismograph Info</summary>
+        <ul style="padding-left:1.2em; color:#111">
+          <li><span style="display:inline-block;width:1em;height:1em;margin-right:4px"></span>Stuff</li>
+          <li><span style="display:inline-block;width:1em;height:1em;margin-right:4px"></span>Stuff</li>
+        </ul>
+      </details>
+    </div>
+  </details>
+
   <!-- Top-right: visibility & reset & toggle overlays-->
-  <div id="globalControls">
+  <div id="globalControls">   
     <button id="toggleAll">Toggle Windows</button>
     <button id="resetAll">Reset Windows</button>
     <button id="toggleOverlayBtn" class="active">Hide Text/Icon</button>
@@ -576,63 +579,23 @@
       </div>
     </div>
   </div>
-
-  <!-- Terrain Tutorial Modal -->
-  <div id="terrainTutorialOverlay">
-    <div id="terrainTutorialModal">
-      <button id="terrainTutorialClose">Close</button>
-      <div id="terrainTutorialContent">
-        <h2>GeoJSON-based Terrain Generation Tutorial</h2>
-        <p>
-          This mode lets you supply a GeoJSON file containing polygons with a property <code>mediumId</code> that matches one of the medium indices in the simulator. When you load the GeoJSON, you also enter a bounding box (Min Lat, Max Lat, Min Lng, Max Lng) corresponding to the region covered by the GeoJSON, so the simulator maps each grid cell center to a latitude/longitude within that box.
-        </p>
-        <ol>
-          <li>Prepare a GeoJSON file with Polygon or MultiPolygon features. Each feature’s <code>properties.mediumId</code> should be an integer matching one of the mediums in the “Medium Legend” (e.g., 0 = Soft Soil, 2 = Water, etc.).</li>
-          <li>In the bounding box inputs, enter:
-            <ul>
-              <li><strong>Min Lat</strong> and <strong>Max Lat</strong>: the southernmost and northernmost latitudes of your region.</li>
-              <li><strong>Min Lng</strong> and <strong>Max Lng</strong>: the westernmost and easternmost longitudes of your region.</li>
-            </ul>
-          </li>
-          <li>Click “Generate Terrain”. For each grid cell, the simulator computes the corresponding lat/lng:
-            <pre>lat = MinLat + (y + 0.5)/rows * (MaxLat - MinLat)
-lng = MinLng + (x + 0.5)/cols * (MaxLng - MinLng)</pre>
-            and tests which polygon contains that point. If a polygon with <code>mediumId</code> is found, the cell gets that medium. Otherwise it defaults to a fallback (Soft Soil).
-          </li>
-          <li>Example GeoJSON snippet:
-            <pre>{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "mediumId": 2 },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [120.95, 14.55],
-            [120.98, 14.55],
-            [120.98, 14.58],
-            [120.95, 14.58],
-            [120.95, 14.55]
-          ]
-        ]
-      }
-    }
-  ]
-}</pre>
-            This marks that rectangle area as Water (mediumId 2). Adjust coordinates & IDs as needed.
-          </li>
-          <li>After loading, click Generate Terrain. The grid updates accordingly.</li>
-        </ol>
-        <p>
-          Make sure your GeoJSON’s coordinates and bounding box line up: the bounding box you provide should exactly cover the region of interest in your GeoJSON, so mapping is correct.
-        </p>
-      </div>
-    </div>
-  </div>
-
+  
   <!-- Reference external JS -->
-  <script src="index.js"></script>
+  <script src="js/-dropdown-visibility--reset-.js"></script>
+  <script src="js/-window-dragging-.js"></script>
+  <script src="js/-canvas--simulation-setup-.js"></script>
+  <script src="js/---------load-icons-from-localstorage---------.js"></script>
+  <script src="js/---------icon-maker-logic---------.js"></script>
+  <script src="js/---------load-icons-on-startup---------.js"></script>
+  <script src="js/---------main-simulation--paint--text--icon-placement-logic---------.js"></script>
+  <script src="js/-text-tool-handlers-.js"></script>
+  <script src="js/-simulation-control-buttons-.js"></script>
+  <script src="js/-origins-list--per-origin-magnitude-.js"></script>
+  <script src="js/-button-helpers-for-selecting-tools-.js"></script>
+  <script src="js/-seismograph-.js"></script>
+  <script src="js/-undoredo-main-.js"></script>
+  <script src="js/-toggle-overlays-button-.js"></script>
+  <script src="js/-saveload-terrain-.js"></script>
+  <script src="index.init.js"></script>
 </body>
 </html>
